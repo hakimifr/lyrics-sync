@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# pyright: reportUnknownMemberType=false,reportUnknownVariableType=false
+# pyright: reportUnusedCallResult=false,reportUnusedParameter=false
+
 import argparse
 import asyncio
 import sys
@@ -19,7 +22,7 @@ import time
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Final, Literal, cast
 
 from httpx import AsyncClient
 from mutagen import File
@@ -74,10 +77,10 @@ Result = Ok | Error
 
 class RateLimiter:
     def __init__(self, max_calls: int, period: int):
-        self.max_calls = max_calls
-        self.period = period
-        self.calls = []
-        self.lock = asyncio.Lock()
+        self.max_calls: Final[int] = max_calls
+        self.period: Final[int] = period
+        self.calls: list[float] = []
+        self.lock: Final[asyncio.Lock] = asyncio.Lock()
 
     async def acquire(self):
         async with self.lock:
@@ -100,15 +103,24 @@ itunes_limiter = RateLimiter(max_calls=20, period=60)
 def write_lyrics(file: Path, lyrics: str) -> bool:
     try:
         au = File(file)
+        if not au:
+            console_stderr.print(
+                f"[red]Cannot write lyrics for '{file.name}', mutagen unable to infer type[/red]"
+            )
         match au:
             case MP3():
-                au.tags.add(USLT(encoding=3, lang="eng", desc="", text=lyrics))
+                au.tags.add(USLT(encoding=3, lang="eng", desc="", text=lyrics))  # pyright: ignore[reportOptionalMemberAccess]
             case FLAC():
                 au["LYRICS"] = lyrics
             case OggOpus():
                 au["LYRICS"] = lyrics
             case MP4():
                 au["©lyr"] = lyrics
+            case _:
+                console_stderr.print(
+                    f"[red]Cannot write lyrics for '{file.name}, extension is unsupported'[/red]"
+                )
+                return False
         au.save()
         return True
     except Exception as e:  # ruff: ignore[blind-except]
@@ -120,6 +132,10 @@ def write_lyrics(file: Path, lyrics: str) -> bool:
 
 def read_tags(path: Path) -> tuple[str, str, str]:
     audio = File(path, easy=True)
+    if not audio:
+        console_stderr.print(f"[red]Failed to read metadata tags for {path.name}[/red]")
+        return "", "", ""
+    audio = cast(dict[str, str], cast(object, audio))
     artists = audio.get("artist", [""])[0]
     title = audio.get("title", [""])[0]
     album = audio.get("album", [""])[0]
@@ -148,7 +164,8 @@ async def fetch_lyrics(title: str, album: str, artist: str) -> Result:
             False, f"iTunes search failed, status code {itunes_response.status_code}"
         )
 
-    results = itunes_response.json()["results"]
+    response = cast(dict[str, str], itunes_response.json())
+    results = cast(list[dict[str, str]], cast(object, response["results"]))
     if len(results) == 0:
         return Error(False, "iTunes search failed, no match found")
     track_id = results[0]["trackId"]
@@ -163,30 +180,33 @@ async def fetch_lyrics(title: str, album: str, artist: str) -> Result:
     )
 
     if lyrics_response.status_code != 200:
-        error = lyrics_response.json()["error"]["message"]
+        error = cast(str, lyrics_response.json()["error"]["message"])
         return Error(
             False,
             f"Paxsenix lyrics fetch failed, status code {lyrics_response.status_code}, error: {error}",
         )
 
-    return Ok(True, lyrics_response.json()["content"])
+    return Ok(True, cast(str, lyrics_response.json()["content"]))
 
 
 async def process_file(path: Path, semaphore: asyncio.Semaphore):
     title, album, artist = await asyncio.to_thread(read_tags, path)
     async with semaphore:
         lyrics = await fetch_lyrics(title, album, artist)
-        if not lyrics.ok:
-            console.print(
-                f"[red]Failed to fetch lyrics for '{title} - {artist}': {lyrics.err_msg}[/red]"
-            )
-            return
-
-    ret = await asyncio.to_thread(write_lyrics, path, lyrics.lyrics)
-    if ret:
-        console.print(f"[green]Wrote lyrics for '{path.name}'[/green]")
-    else:
-        console.print(f"[red]Failed to write lyrics for '{path.name}'[/red]")
+        match lyrics:
+            case Error():
+                console.print(
+                    f"[red]Failed to fetch lyrics for '{title} - {artist}': {lyrics.err_msg}[/red]"
+                )
+                return
+            case Ok():
+                ret = await asyncio.to_thread(write_lyrics, path, lyrics.lyrics)
+                if ret:
+                    console.print(f"[green]Wrote lyrics for '{path.name}'[/green]")
+                else:
+                    console.print(
+                        f"[red]Failed to write lyrics for '{path.name}'[/red]"
+                    )
 
 
 async def main():
@@ -194,7 +214,7 @@ async def main():
     if hasattr(parsed, "sync"):
         valid_files: list[Path] = []
         semaphore = asyncio.Semaphore(3)
-        for d in parsed.sync:
+        for d in cast(list[str], parsed.sync):
             valid_files.extend(list(find_audio_files(Path(d))))
 
         with Progress(
