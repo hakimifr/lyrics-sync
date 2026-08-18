@@ -1,6 +1,6 @@
 [project]
-name = "lyrics-sync"
-version = "0.1.0"
+name = "hakimifr-lyrics-sync"
+version = "0.0.01"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
