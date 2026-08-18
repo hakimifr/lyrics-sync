@@ -33,6 +33,7 @@ from rich.progress import (
     TextColumn,
     TimeElapsedColumn,
 )
+from rich.table import Table
 
 from hakimifr_lyrics_sync import console
 from hakimifr_lyrics_sync.provider import Apple, BetterLyrics, LyricsFetcher
@@ -113,11 +114,11 @@ def find_audio_files(dir: Path) -> Generator[Path]:
             yield f
 
 
-async def process_file(path: Path, semaphore: asyncio.Semaphore):
+async def process_file(path: Path, semaphore: asyncio.Semaphore) -> bool:
     track = await asyncio.to_thread(read_tags, path)
     if not track.title or not track.artist:
         console.print(f"[yellow]Not enough song metadata for {path.name}[/yellow]")
-        return
+        return False
     async with semaphore:
         lyrics = await lyrics_fetcher.fetch(track)
         match lyrics:
@@ -125,13 +126,14 @@ async def process_file(path: Path, semaphore: asyncio.Semaphore):
                 console.print(
                     f"[red]Failed to fetch lyrics for '{track.title} - {track.artist}': {lyrics.err_msg}[/red]"
                 )
-                return
+                return False
             case Ok():
                 ret = await asyncio.to_thread(write_lyrics, path, lyrics.lyrics)
                 if not ret:
                     console.print(
                         f"[red]Failed to write lyrics for '{path.name}'[/red]"
                     )
+                return True
 
 
 async def main():
@@ -153,11 +155,17 @@ async def main():
             task_id = p.add_task("Fetching lyrics", total=len(valid_files))
 
             async def process_and_advance(path: Path):
-                await process_file(path, semaphore)
+                r = await process_file(path, semaphore)
                 p.advance(task_id)
+                return r
 
-            await asyncio.gather(*(process_and_advance(path) for path in valid_files))
-            p.update(task_id, completed=True)
+            results_futures = await asyncio.gather(
+                *(process_and_advance(path) for path in valid_files)
+            )
+            results = [f for f in results_futures]
             await lyrics_fetcher.close()
+            t = Table("[brgreen]success[/brgreen]", "[brred]failures[/brred]")
+            t.add_row(str(results.count(True)), str(results.count(False)))
+            console.print(t)
     else:
         root_parser.print_help()
