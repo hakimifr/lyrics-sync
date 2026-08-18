@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Literal, cast
 
-from httpx import AsyncClient
+from httpx import AsyncClient, Headers
 from mutagen import File
 from mutagen.flac import FLAC
 from mutagen.id3 import USLT
@@ -54,7 +54,6 @@ sync_parser = subparsers.add_parser("sync")
 sync_parser.add_argument("sync", nargs="+")
 
 console = Console()
-console_stderr = Console(stderr=True)
 
 lyrics_client = AsyncClient(timeout=120)
 itunes_client = AsyncClient(timeout=15)
@@ -75,7 +74,14 @@ class Error:
 Result = Ok | Error
 
 
-class RateLimiter:
+@dataclass
+class RateLimitState:
+    limit: int | None
+    remaining: int | None
+    limit_type: str | None
+
+
+class ItunesRateLimiter:
     def __init__(self, max_calls: int, period: int):
         self.max_calls: Final[int] = max_calls
         self.period: Final[int] = period
@@ -89,7 +95,7 @@ class RateLimiter:
             if len(self.calls) >= self.max_calls:
                 sleep_time = self.period - (now - self.calls[0])
                 console.print(
-                    f"[blue]Sleeping for {sleep_time} to avoid ratelimit from itunes API[/blue]"
+                    f"[magenta]Sleeping for {sleep_time} s to avoid ratelimit from itunes API[/magenta]"
                 )
                 await asyncio.sleep(sleep_time)
                 now = time.monotonic()
@@ -97,14 +103,36 @@ class RateLimiter:
             self.calls.append(time.monotonic())
 
 
-itunes_limiter = RateLimiter(max_calls=20, period=60)
+class BetterLyricsRateLimiter:
+    def __init__(self, backoff: float = 2.0):
+        self.remaining: int | None = None
+        self.backoff: Final[float] = backoff
+        self.lock: Final[asyncio.Lock] = asyncio.Lock()
+
+    async def acquire(self):
+        async with self.lock:
+            if self.remaining == 0:
+                console.print(
+                    f"[magenta] Sleeping for {self.backoff} s due to BetterLyrics ratelimit[/magenta]"
+                )
+                await asyncio.sleep(self.backoff)
+
+    def update(self, headers: Headers):
+        remaining = cast(str, headers.get("X-RateLimit-Remaining"))
+        limit_type = cast(str, headers.get("X-RateLimit-Type"))
+        if remaining is not None and limit_type == "normal":
+            self.remaining = int(remaining)
+
+
+itunes_limiter = ItunesRateLimiter(max_calls=20, period=60)
+betterlyrics_limiter = BetterLyricsRateLimiter()
 
 
 def write_lyrics(file: Path, lyrics: str) -> bool:
     try:
         au = File(file)
         if not au:
-            console_stderr.print(
+            console.print(
                 f"[red]Cannot write lyrics for '{file.name}', mutagen unable to infer type[/red]"
             )
         match au:
@@ -117,29 +145,27 @@ def write_lyrics(file: Path, lyrics: str) -> bool:
             case MP4():
                 au["©lyr"] = lyrics
             case _:
-                console_stderr.print(
+                console.print(
                     f"[red]Cannot write lyrics for '{file.name}, extension is unsupported'[/red]"
                 )
                 return False
         au.save()
         return True
     except Exception as e:  # ruff: ignore[blind-except]
-        console_stderr.print(
-            f"[brred]error adding lyrics to '{file.name}'[/brred]: {e}"
-        )
+        console.print(f"[brred]error adding lyrics to '{file.name}'[/brred]: {e}")
         return False
 
 
-def read_tags(path: Path) -> tuple[str, str, str]:
+def read_tags(path: Path) -> tuple[str, str, str, float]:
     audio = File(path, easy=True)
     if not audio:
-        console_stderr.print(f"[red]Failed to read metadata tags for {path.name}[/red]")
-        return "", "", ""
+        console.print(f"[red]Failed to read metadata tags for {path.name}[/red]")
+        return "", "", "", 0
     audio = cast(dict[str, str], cast(object, audio))
     artists = audio.get("artist", [""])[0]
     title = audio.get("title", [""])[0]
     album = audio.get("album", [""])[0]
-    return title, album, artists
+    return title, album, artists, audio.info.length  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def find_audio_files(dir: Path) -> Generator[Path]:
@@ -148,7 +174,7 @@ def find_audio_files(dir: Path) -> Generator[Path]:
             yield f
 
 
-async def fetch_lyrics(title: str, album: str, artist: str) -> Result:
+async def _fetch_lyrics_apple(title: str, artist: str) -> Result:
     await itunes_limiter.acquire()
     itunes_response = await itunes_client.get(
         "https://itunes.apple.com/search",
@@ -189,10 +215,74 @@ async def fetch_lyrics(title: str, album: str, artist: str) -> Result:
     return Ok(True, cast(str, lyrics_response.json()["content"]))
 
 
+async def _fetch_lyrics_betterlyrics(
+    title: str, album: str, artist: str, length: float, retry: int = 2
+) -> Result:
+    params = {
+        "s": title,
+        "a": artist.replace(" & ", ", "),
+        "d": int(length),
+    }
+    if album:
+        params.update({"al": album})
+    for attempt in range(retry):
+        await betterlyrics_limiter.acquire()
+        response = await lyrics_client.get(
+            "https://lyrics-api.boidu.dev/getLyrics",
+            params=params,
+        )
+        betterlyrics_limiter.update(response.headers)
+
+        if response.status_code == 200:
+            r = cast(dict[str, str], response.json())
+            ttml = r["ttml"]
+            console.print(
+                f"[brcyan]BetterLyrics match found for '{title} - {artist}'[/brcyan]"
+            )
+            return Ok(True, ttml)
+        if response.status_code == 422:
+            return Error(
+                False,
+                f"BetterLyrics match not available for '{title} - {artist}', not enough song data from file metadata",
+            )
+        if response.status_code == 429 or response.status_code == 401:
+            error = (
+                f"[yellow]Attempt {attempt + 1}/{retry} failed for '{title} - {artist}'"
+            )
+            if (attempt + 1) < retry:
+                error = f"{error}, retrying[/yellow]"
+            else:
+                error = f"{error}[/yellow]"
+            console.print(error)
+            continue
+    return Error(False, "No match from BetterLyrics")
+
+
+async def fetch_lyrics(title: str, album: str, artist: str, length: float) -> Result:
+    # return await _fetch_lyrics_apple(title, artist)
+    bl_result = await _fetch_lyrics_betterlyrics(title, album, artist, length)
+    match bl_result:
+        case Ok():
+            return bl_result
+        case Error():
+            console.print(
+                f"[yellow]Retrying '{title} - {artist}' with Apple Music instead[/yellow]"
+            )
+            am_result = await _fetch_lyrics_apple(title, artist)
+            match am_result:
+                case Ok():
+                    return am_result
+                case Error():
+                    return Error(False, f"All provider tried for '{title} - {artist}'")
+
+
 async def process_file(path: Path, semaphore: asyncio.Semaphore):
-    title, album, artist = await asyncio.to_thread(read_tags, path)
+    title, album, artist, length = await asyncio.to_thread(read_tags, path)
+    if not title or not artist:
+        console.print(f"[yellow]Not enough song metadata for {path.name}[/yellow]")
+        return
     async with semaphore:
-        lyrics = await fetch_lyrics(title, album, artist)
+        lyrics = await fetch_lyrics(title, album, artist, length)
         match lyrics:
             case Error():
                 console.print(
