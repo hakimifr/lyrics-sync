@@ -14,7 +14,8 @@
 
 import asyncio
 
-from .main import main
+from hakimifr_lyrics_sync.main import main
 
-if __name__ == "__main__":
+
+def run():
     asyncio.run(main())
