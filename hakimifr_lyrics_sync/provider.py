@@ -177,7 +177,7 @@ class LyricsFetcher:
                         console.print(
                             f"[yellow]Retrying '{track.title} - {track.artist}' with provider {self.providers[next_provider].name}[/yellow]"
                         )
-                        fails.append(f"{p.name}: {err.err_msg}")
+                    fails.append(f"{p.name}: {err.err_msg}")
 
         return Error("; ".join(fails) or "track unsupported by all providers")
 

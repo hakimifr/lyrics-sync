@@ -157,6 +157,7 @@ async def main():
                 p.advance(task_id)
 
             await asyncio.gather(*(process_and_advance(path) for path in valid_files))
+            p.update(task_id, completed=True)
             await lyrics_fetcher.close()
     else:
         root_parser.print_help()
