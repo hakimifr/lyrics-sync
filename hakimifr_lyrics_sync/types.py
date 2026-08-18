@@ -12,6 +12,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from rich.console import Console
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Literal
 
-console = Console()
+
+@dataclass
+class Ok:
+    lyrics: str
+    ok: Literal[True] = True
+
+
+@dataclass
+class Error:
+    err_msg: str
+    ok: Literal[False] = False
+
+
+Result = Ok | Error
+
+
+@dataclass
+class Track:
+    title: str
+    album: str
+    artist: str
+    length: float
+    path: Path
+
+
+@dataclass
+class Lyrics:
+    content: str
+    format: Literal["ttml", "lrc", "plain"]
+    provider: str

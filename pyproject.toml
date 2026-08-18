@@ -10,6 +10,12 @@ dependencies = [
     "rich>=15.0.0",
 ]
 
+[tool.pyright]
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnusedCallResult = false
+reportUnusedParameter = false
+
 [project.scripts]
 lsync = "hakimifr_lyrics_sync.__main__:run"
 
