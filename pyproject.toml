@@ -9,3 +9,9 @@ dependencies = [
     "mutagen>=1.48.1",
     "rich>=15.0.0",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.16.3",
+    "ty>=0.0.72",
+]

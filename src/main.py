@@ -17,7 +17,9 @@ import asyncio
 import sys
 import time
 from collections.abc import Generator
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from httpx import AsyncClient
 from mutagen import File
@@ -53,6 +55,21 @@ console_stderr = Console(stderr=True)
 
 lyrics_client = AsyncClient(timeout=120)
 itunes_client = AsyncClient(timeout=15)
+
+
+@dataclass
+class Ok:
+    ok: Literal[True]
+    lyrics: str
+
+
+@dataclass
+class Error:
+    ok: Literal[False]
+    err_msg: str
+
+
+Result = Ok | Error
 
 
 class RateLimiter:
@@ -115,7 +132,7 @@ def find_audio_files(dir: Path) -> Generator[Path]:
             yield f
 
 
-async def fetch_lyrics(title: str, album: str, artist: str) -> tuple[bool, str]:
+async def fetch_lyrics(title: str, album: str, artist: str) -> Result:
     await itunes_limiter.acquire()
     itunes_response = await itunes_client.get(
         "https://itunes.apple.com/search",
@@ -127,11 +144,13 @@ async def fetch_lyrics(title: str, album: str, artist: str) -> tuple[bool, str]:
     )
 
     if itunes_response.status_code != 200:
-        return False, f"iTunes search failed, status code {itunes_response.status_code}"
+        return Error(
+            False, f"iTunes search failed, status code {itunes_response.status_code}"
+        )
 
     results = itunes_response.json()["results"]
     if len(results) == 0:
-        return False, "iTunes search failed, no match found"
+        return Error(False, "iTunes search failed, no match found")
     track_id = results[0]["trackId"]
 
     lyrics_response = await lyrics_client.get(
@@ -145,25 +164,25 @@ async def fetch_lyrics(title: str, album: str, artist: str) -> tuple[bool, str]:
 
     if lyrics_response.status_code != 200:
         error = lyrics_response.json()["error"]["message"]
-        return (
+        return Error(
             False,
             f"Paxsenix lyrics fetch failed, status code {lyrics_response.status_code}, error: {error}",
         )
 
-    return True, lyrics_response.json()["content"]
+    return Ok(True, lyrics_response.json()["content"])
 
 
 async def process_file(path: Path, semaphore: asyncio.Semaphore):
     title, album, artist = await asyncio.to_thread(read_tags, path)
     async with semaphore:
         lyrics = await fetch_lyrics(title, album, artist)
-        if not lyrics[0]:
+        if not lyrics.ok:
             console.print(
-                f"[red]Failed to fetch lyrics for '{title} - {artist}': {lyrics[1]}[/red]"
+                f"[red]Failed to fetch lyrics for '{title} - {artist}': {lyrics.err_msg}[/red]"
             )
             return
 
-    ret = await asyncio.to_thread(write_lyrics, path, lyrics[1])
+    ret = await asyncio.to_thread(write_lyrics, path, lyrics.lyrics)
     if ret:
         console.print(f"[green]Wrote lyrics for '{path.name}'[/green]")
     else:
