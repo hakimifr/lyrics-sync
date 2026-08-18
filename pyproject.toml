@@ -1,6 +1,6 @@
 [project]
 name = "hakimifr-lyrics-sync"
-version = "0.0.01"
+version = "0.0.03"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
@@ -9,6 +9,9 @@ dependencies = [
     "mutagen>=1.48.1",
     "rich>=15.0.0",
 ]
+
+[project.scripts]
+lsync = "src.main:main"
 
 [dependency-groups]
 dev = [
