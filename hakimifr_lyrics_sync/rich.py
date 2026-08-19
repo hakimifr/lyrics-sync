@@ -66,11 +66,12 @@ class LiveInfo:  # I can't think of a better name
 
     def _render(self) -> Group:
         t_retries = Table.grid()
+        t_retries.add_column(overflow="ellipsis", no_wrap=True)
         p_retries = Panel(t_retries, border_style="bold yellow")
         render_retries = False
         if self.retries:
             render_retries = True
-            for r in self.retries[-3:]:
+            for r in self.retries[-5:]:
                 t_retries.add_row(r)
 
         t_summary = Table.grid(padding=(0, 2))
