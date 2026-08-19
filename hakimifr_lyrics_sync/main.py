@@ -36,7 +36,7 @@ from rich.progress import (
 from rich.table import Table
 
 from hakimifr_lyrics_sync import console
-from hakimifr_lyrics_sync.provider import Apple, BetterLyrics, LyricsFetcher
+from hakimifr_lyrics_sync.lyrics_provider import Apple, BetterLyrics, LyricsFetcher
 from hakimifr_lyrics_sync.types import Error, Ok, Track
 
 SUPPORTED_EXTENSIONS: set[str] = {".mp3", ".flac", ".opus", ".m4a"}
