@@ -64,26 +64,26 @@ class RateLimitState:
 
 def write_lyrics(file: Path, lyrics: str) -> bool:
     try:
-        au = File(file)
-        if not au:
+        audio = File(file)
+        if not audio:
             console.print(
                 f"[red]Cannot write lyrics for '{file.name}', mutagen unable to infer type[/red]"
             )
-        match au:
+        match audio:
             case MP3():
-                au.tags.add(USLT(encoding=3, lang="eng", desc="", text=lyrics))  # pyright: ignore[reportOptionalMemberAccess]
+                audio.tags.add(USLT(encoding=3, lang="eng", desc="", text=lyrics))  # pyright: ignore[reportOptionalMemberAccess]
             case FLAC():
-                au["LYRICS"] = lyrics
+                audio["LYRICS"] = lyrics
             case OggOpus():
-                au["LYRICS"] = lyrics
+                audio["LYRICS"] = lyrics
             case MP4():
-                au["©lyr"] = lyrics
+                audio["©lyr"] = lyrics
             case _:
                 console.print(
                     f"[red]Cannot write lyrics for '{file.name}, extension is unsupported'[/red]"
                 )
                 return False
-        au.save()
+        audio.save()
         return True
     except Exception as e:  # ruff: ignore[blind-except]
         console.print(f"[brred]error adding lyrics to '{file.name}'[/brred]: {e}")
