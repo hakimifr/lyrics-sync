@@ -37,6 +37,7 @@ from rich.table import Table
 
 from hakimifr_lyrics_sync import console
 from hakimifr_lyrics_sync.lyrics_provider import Apple, BetterLyrics, LyricsFetcher
+from hakimifr_lyrics_sync.store import Config, LastSyncInfo
 from hakimifr_lyrics_sync.types import Error, Ok, Track
 
 SUPPORTED_EXTENSIONS: set[str] = {".mp3", ".flac", ".opus", ".m4a"}
@@ -52,6 +53,7 @@ sync_parser = subparsers.add_parser("sync")
 
 sync_parser.add_argument("sync", nargs="+")
 
+config = Config()
 lyrics_fetcher = LyricsFetcher((BetterLyrics(), Apple()))
 
 
@@ -116,6 +118,12 @@ def find_audio_files(dir: Path) -> Generator[Path]:
 
 async def process_file(path: Path, semaphore: asyncio.Semaphore) -> bool:
     track = await asyncio.to_thread(read_tags, path)
+    if config.should_sync(path) in {
+        LastSyncInfo.SUCCESSFUL,
+        LastSyncInfo.ALREADY_SYNCED,
+    }:
+        console.print(f"Skipping already synced file '{path.name}'")
+        return True
     if not track.title or not track.artist:
         console.print(f"[yellow]Not enough song metadata for {path.name}[/yellow]")
         return False
@@ -126,6 +134,7 @@ async def process_file(path: Path, semaphore: asyncio.Semaphore) -> bool:
                 console.print(
                     f"[red]Failed to fetch lyrics for '{track.title} - {track.artist}': {lyrics.err_msg}[/red]"
                 )
+                config.store_sync_info(path, LastSyncInfo.FAILED, "ttml")
                 return False
             case Ok():
                 ret = await asyncio.to_thread(write_lyrics, path, lyrics.lyrics)
@@ -133,6 +142,9 @@ async def process_file(path: Path, semaphore: asyncio.Semaphore) -> bool:
                     console.print(
                         f"[red]Failed to write lyrics for '{path.name}'[/red]"
                     )
+                    config.store_sync_info(path, LastSyncInfo.FAILED, "ttml")
+                    return False
+                config.store_sync_info(path, LastSyncInfo.SUCCESSFUL, "ttml")
                 return True
 
 
@@ -166,6 +178,7 @@ async def main():
             await lyrics_fetcher.close()
             t = Table("[brgreen]success[/brgreen]", "[brred]failures[/brred]")
             t.add_row(str(results.count(True)), str(results.count(False)))
+            config.save_config_to_file()
             console.print(t)
     else:
         root_parser.print_help()

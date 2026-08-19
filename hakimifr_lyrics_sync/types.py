@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+type SyncLevel = Literal["ttml", "elrc", "lrc", "plain"]
+
 
 @dataclass
 class Ok:
@@ -44,5 +46,5 @@ class Track:
 @dataclass
 class Lyrics:
     content: str
-    format: Literal["ttml", "lrc", "plain"]
+    format: SyncLevel
     provider: str
