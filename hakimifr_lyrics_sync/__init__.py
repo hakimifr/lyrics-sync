@@ -14,4 +14,7 @@
 
 from rich.console import Console
 
+from hakimifr_lyrics_sync.rich import LiveInfo
+
 console = Console()
+live_info = LiveInfo(console)

@@ -19,7 +19,7 @@ from typing import Final, cast, override
 
 from httpx import Headers
 
-from hakimifr_lyrics_sync import console
+from hakimifr_lyrics_sync import live_info
 
 
 class RateLimiter(ABC):
@@ -43,10 +43,10 @@ class ItunesRateLimiter(RateLimiter):
             self.calls = [t for t in self.calls if now - t < self.period]
             if len(self.calls) >= self.max_calls:
                 sleep_time = self.period - (now - self.calls[0])
-                console.print(
-                    f"[magenta]Sleeping for {sleep_time} s to avoid ratelimit from itunes API[/magenta]"
-                )
-                await asyncio.sleep(sleep_time)
+                with live_info.waiting(
+                    f"Sleeping for {sleep_time} s to avoid ratelimit from itunes API"
+                ):
+                    await asyncio.sleep(sleep_time)
                 now = time.monotonic()
                 self.calls = [t for t in self.calls if now - t < self.period]
             self.calls.append(time.monotonic())
@@ -62,10 +62,10 @@ class BetterLyricsRateLimiter(RateLimiter):
     async def acquire(self):
         async with self.lock:
             if self.remaining == 0:
-                console.print(
+                with live_info.waiting(
                     f"[magenta] Sleeping for {self.backoff} s due to BetterLyrics ratelimit[/magenta]"
-                )
-                await asyncio.sleep(self.backoff)
+                ):
+                    await asyncio.sleep(self.backoff)
 
     @override
     def observe(self, response_headers: Headers):

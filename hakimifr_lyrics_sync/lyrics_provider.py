@@ -18,7 +18,7 @@ from typing import ClassVar, Final, cast, final, override
 
 from httpx import AsyncClient
 
-from hakimifr_lyrics_sync import console
+from hakimifr_lyrics_sync import console, live_info
 from hakimifr_lyrics_sync.rate_limiter import (
     BetterLyricsRateLimiter,
     ItunesRateLimiter,
@@ -88,9 +88,6 @@ class Apple(LyricsProvider):
                 f"Paxsenix lyrics fetch failed, status code {lyrics_response.status_code}, error: {error}"
             )
 
-        console.print(
-            f"Apple Music lyrics match found for '{track.title} - {track.artist}'"
-        )
         return Ok(cast(str, lyrics_response.json()["content"]))
 
     @override
@@ -130,21 +127,12 @@ class BetterLyrics(LyricsProvider):
             if response.status_code == 200:
                 r = cast(dict[str, str], response.json())
                 ttml = r["ttml"]
-                console.print(
-                    f"[brcyan]BetterLyrics match found for '{track.title} - {track.artist}'[/brcyan]"
-                )
                 return Ok(ttml)
             if response.status_code == 422:
                 return Error(
                     f"BetterLyrics match not available for '{track.title} - {track.artist}', not enough song data from file metadata"
                 )
             if response.status_code == 429 or response.status_code == 401:
-                error = f"[yellow]Attempt {attempt + 1}/{retry} failed for '{track.title} - {track.artist}'"
-                if (attempt + 1) < retry:
-                    error = f"{error}, retrying[/yellow]"
-                else:
-                    error = f"{error}[/yellow]"
-                console.print(error)
                 continue
         return Error("No match from BetterLyrics")
 
@@ -161,6 +149,9 @@ class LyricsFetcher:
     def __init__(self, providers: Sequence[LyricsProvider]):
         self.providers: Final = providers
         console.print(f"[bold]Default provider is {self.providers[0].name}[/bold]")
+        console.print(
+            f"  All providers, in order of priority: {', '.join(p.name for p in self.providers)}"
+        )
 
     async def fetch(self, track: Track) -> Result:
         fails: list[str] = []
@@ -170,12 +161,18 @@ class LyricsFetcher:
 
             match await p.fetch(track):
                 case Ok() as ok:
+                    live_info.synced += 1
+                    console.print(
+                        f"Match found for '{track.title} - {track.artist}' with provider '{p.name}'"
+                    )
+                    if fails:
+                        live_info.fallback += 1
                     return ok
                 case Error() as err:
                     next_provider = self.providers.index(p) + 1
                     if next_provider < len(self.providers):
-                        console.print(
-                            f"[yellow]Retrying '{track.title} - {track.artist}' with provider {self.providers[next_provider].name}[/yellow]"
+                        live_info.retries.append(
+                            f"Retrying '{track.title} - {track.artist}' with provider {self.providers[next_provider].name}"
                         )
                     fails.append(f"{p.name}: {err.err_msg}")
 

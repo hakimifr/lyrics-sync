@@ -26,16 +26,8 @@ from mutagen.id3 import USLT
 from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4
 from mutagen.oggopus import OggOpus
-from rich.progress import (
-    BarColumn,
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeElapsedColumn,
-)
-from rich.table import Table
 
-from hakimifr_lyrics_sync import console
+from hakimifr_lyrics_sync import console, live_info
 from hakimifr_lyrics_sync.lyrics_provider import Apple, BetterLyrics, LyricsFetcher
 from hakimifr_lyrics_sync.store import Config, LastSyncInfo
 from hakimifr_lyrics_sync.types import Error, Ok, Track
@@ -95,7 +87,7 @@ def write_lyrics(file: Path, lyrics: str) -> bool:
 def read_tags(path: Path) -> Track:
     audio = File(path, easy=True)
     if not audio:
-        console.print(f"[red]Failed to read metadata tags for {path.name}[/red]")
+        live_info.failures.append(f"Failed to read metadata tags for {path.name}")
         return Track("", "", "", 0, path)
     audio = cast(dict[str, str], cast(object, audio))
     artists = audio.get("artist", [""])[0]
@@ -123,24 +115,28 @@ async def process_file(path: Path, semaphore: asyncio.Semaphore) -> bool:
         LastSyncInfo.ALREADY_SYNCED,
     }:
         console.print(f"Skipping already synced file '{path.name}'")
+        live_info.skipped += 1
+        live_info.increment_prog_bar()
         return True
     if not track.title or not track.artist:
         console.print(f"[yellow]Not enough song metadata for {path.name}[/yellow]")
+        live_info.increment_prog_bar()
         return False
     async with semaphore:
         lyrics = await lyrics_fetcher.fetch(track)
+        live_info.increment_prog_bar()
         match lyrics:
             case Error():
-                console.print(
-                    f"[red]Failed to fetch lyrics for '{track.title} - {track.artist}': {lyrics.err_msg}[/red]"
+                live_info.failures.append(
+                    f"Failed to fetch lyrics for '{track.title} - {track.artist}': {lyrics.err_msg}"
                 )
                 config.store_sync_info(path, LastSyncInfo.FAILED, "ttml")
                 return False
             case Ok():
                 ret = await asyncio.to_thread(write_lyrics, path, lyrics.lyrics)
                 if not ret:
-                    console.print(
-                        f"[red]Failed to write lyrics for '{path.name}'[/red]"
+                    live_info.failures.append(
+                        f"Failed to write lyrics for '{path.name}'"
                     )
                     config.store_sync_info(path, LastSyncInfo.FAILED, "ttml")
                     return False
@@ -156,29 +152,13 @@ async def main():
         for d in cast(list[str], parsed.sync):
             valid_files.extend(list(find_audio_files(Path(d))))
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TextColumn("{task.completed}/{task.total}"),
-            TimeElapsedColumn(),
-            console=console,
-        ) as p:
-            task_id = p.add_task("Fetching lyrics", total=len(valid_files))
-
-            async def process_and_advance(path: Path):
-                r = await process_file(path, semaphore)
-                p.advance(task_id)
-                return r
-
-            results_futures = await asyncio.gather(
-                *(process_and_advance(path) for path in valid_files)
-            )
-            results = [f for f in results_futures]
-            await lyrics_fetcher.close()
-            t = Table("[brgreen]success[/brgreen]", "[brred]failures[/brred]")
-            t.add_row(str(results.count(True)), str(results.count(False)))
-            config.save_config_to_file()
-            console.print(t)
+        live_info.update_total(len(valid_files))
+        live_info.start()
+        await asyncio.gather(
+            *(process_file(path, semaphore) for path in valid_files),
+        )
+        await lyrics_fetcher.close()
+        live_info.stop()
+        config.save_config_to_file()
     else:
         root_parser.print_help()
