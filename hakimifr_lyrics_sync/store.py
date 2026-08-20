@@ -113,6 +113,10 @@ class Config:
 
     def should_sync(self, path: Path) -> LastSyncInfo:
         if path.as_posix() in (
+            f.audio_file_path for f in self.config.lyrics_successful_sync
+        ):
+            return LastSyncInfo.SUCCESSFUL
+        if path.as_posix() in (
             f.audio_file_path for f in self.config.lyrics_already_synced
         ):
             return LastSyncInfo.ALREADY_SYNCED
@@ -120,27 +124,36 @@ class Config:
             f.audio_file_path for f in self.config.lyrics_failed_sync
         ):
             return LastSyncInfo.FAILED
-        if path.as_posix() in (
-            f.audio_file_path for f in self.config.lyrics_successful_sync
-        ):
-            return LastSyncInfo.SUCCESSFUL
         return LastSyncInfo.NEVER_SYNCED
 
     def store_sync_info(
         self, path: Path, sync_info: LastSyncInfo, sync_level: SyncLevel
     ):
+        p = path.as_posix()
         match sync_info:
             case LastSyncInfo.SUCCESSFUL:
-                self.config.lyrics_successful_sync.append(
-                    LyricsRecord(sync_level, path.as_posix(), time.time())
-                )
+                if p not in [
+                    l.audio_file_path for l in self.config.lyrics_successful_sync
+                ]:
+                    self.config.lyrics_successful_sync.append(
+                        LyricsRecord(sync_level, p, time.time())
+                    )
+                    self.config.lyrics_failed_sync = [
+                        l
+                        for l in self.config.lyrics_failed_sync
+                        if l.audio_file_path != p
+                    ]
             case LastSyncInfo.ALREADY_SYNCED:
-                self.config.lyrics_already_synced.append(
-                    LyricsRecord(sync_level, path.as_posix(), time.time())
-                )
+                if p not in [
+                    l.audio_file_path for l in self.config.lyrics_already_synced
+                ]:
+                    self.config.lyrics_already_synced.append(
+                        LyricsRecord(sync_level, p, time.time())
+                    )
             case LastSyncInfo.FAILED:
-                self.config.lyrics_failed_sync.append(
-                    LyricsRecord(sync_level, path.as_posix(), time.time())
-                )
+                if p not in [l.audio_file_path for l in self.config.lyrics_failed_sync]:
+                    self.config.lyrics_failed_sync.append(
+                        LyricsRecord(sync_level, p, time.time())
+                    )
             case LastSyncInfo.NEVER_SYNCED:
                 raise TypeError("store operation not supported for NEVER_SYNCED")
