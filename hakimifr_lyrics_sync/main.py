@@ -28,7 +28,12 @@ from mutagen.mp4 import MP4
 from mutagen.oggopus import OggOpus
 
 from hakimifr_lyrics_sync import console, live_info
-from hakimifr_lyrics_sync.lyrics_provider import Apple, BetterLyrics, LyricsFetcher
+from hakimifr_lyrics_sync.lyrics_provider import (
+    Apple,
+    BetterLyrics,
+    LrcLib,
+    LyricsFetcher,
+)
 from hakimifr_lyrics_sync.store import Config, LastSyncInfo
 from hakimifr_lyrics_sync.types import Error, Ok, Track
 
@@ -46,7 +51,7 @@ sync_parser = subparsers.add_parser("sync")
 sync_parser.add_argument("sync", nargs="+")
 
 config = Config()
-lyrics_fetcher = LyricsFetcher((BetterLyrics(), Apple()))
+lyrics_fetcher = LyricsFetcher((BetterLyrics(), Apple(), LrcLib()))
 
 
 @dataclass
@@ -130,17 +135,20 @@ async def process_file(path: Path, semaphore: asyncio.Semaphore) -> bool:
                 live_info.failures.append(
                     f"Failed to fetch lyrics for '{track.title} - {track.artist}': {lyrics.err_msg}"
                 )
-                config.store_sync_info(path, LastSyncInfo.FAILED, "ttml")
+                # TODO: format should not be needed for failed bucket.
+                config.store_sync_info(path, LastSyncInfo.FAILED, "plain")
                 return False
             case Ok():
-                ret = await asyncio.to_thread(write_lyrics, path, lyrics.lyrics)
+                ret = await asyncio.to_thread(write_lyrics, path, lyrics.lyrics.content)
                 if not ret:
                     live_info.failures.append(
                         f"Failed to write lyrics for '{path.name}'"
                     )
-                    config.store_sync_info(path, LastSyncInfo.FAILED, "ttml")
+                    config.store_sync_info(path, LastSyncInfo.FAILED, "plain")
                     return False
-                config.store_sync_info(path, LastSyncInfo.SUCCESSFUL, "ttml")
+                config.store_sync_info(
+                    path, LastSyncInfo.SUCCESSFUL, lyrics.lyrics.format
+                )
                 return True
 
 

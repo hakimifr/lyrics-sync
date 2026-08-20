@@ -21,7 +21,7 @@ type SyncLevel = Literal["ttml", "elrc", "lrc", "plain"]
 
 @dataclass
 class Ok:
-    lyrics: str
+    lyrics: Lyrics
     ok: Literal[True] = True
 
 

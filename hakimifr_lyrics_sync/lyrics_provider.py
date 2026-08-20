@@ -22,13 +22,15 @@ from hakimifr_lyrics_sync import console, live_info
 from hakimifr_lyrics_sync.rate_limiter import (
     BetterLyricsRateLimiter,
     ItunesRateLimiter,
+    LrcLibRateLimiter,
     RateLimiter,
 )
-from hakimifr_lyrics_sync.types import Error, Ok, Result, Track
+from hakimifr_lyrics_sync.types import Error, Lyrics, Ok, Result, SyncLevel, Track
 
 
 class LyricsProvider(ABC):
     name: ClassVar[str]
+    type: ClassVar[SyncLevel]
     client: AsyncClient
     rate_limiter: RateLimiter
 
@@ -44,7 +46,8 @@ class LyricsProvider(ABC):
 
 @final
 class Apple(LyricsProvider):
-    name = "Apple Music"
+    name = "Apple Music (iTunes + Paxsenix, TTML)"
+    type = "ttml"
 
     def __init__(self):
         self.client: AsyncClient = AsyncClient(timeout=120)
@@ -88,7 +91,13 @@ class Apple(LyricsProvider):
                 f"Paxsenix lyrics fetch failed, status code {lyrics_response.status_code}, error: {error}"
             )
 
-        return Ok(cast(str, lyrics_response.json()["content"]))
+        return Ok(
+            Lyrics(
+                content=cast(str, lyrics_response.json()["content"]),
+                format=self.type,
+                provider=self.name,
+            )
+        )
 
     @override
     def supports(self, track: Track) -> bool:
@@ -101,7 +110,8 @@ class Apple(LyricsProvider):
 
 @final
 class BetterLyrics(LyricsProvider):
-    name = "Better Lyrics"
+    name = "Better Lyrics (TTML)"
+    type = "ttml"
 
     def __init__(self):
         self.client: AsyncClient = AsyncClient()
@@ -127,7 +137,13 @@ class BetterLyrics(LyricsProvider):
             if response.status_code == 200:
                 r = cast(dict[str, str], response.json())
                 ttml = r["ttml"]
-                return Ok(ttml)
+                return Ok(
+                    Lyrics(
+                        content=ttml,
+                        provider=self.name,
+                        format=self.type,
+                    )
+                )
             if response.status_code == 422:
                 return Error(
                     f"BetterLyrics match not available for '{track.title} - {track.artist}', not enough song data from file metadata"
@@ -139,6 +155,68 @@ class BetterLyrics(LyricsProvider):
     @override
     def supports(self, track: Track) -> bool:
         return not (not track.title or not track.artist or not track.length)
+
+    @override
+    async def close(self) -> None:
+        await self.client.aclose()
+
+
+@final
+class LrcLib(LyricsProvider):
+    name = "LRCLIB (LRC)"
+    type = "lrc"
+
+    def __init__(self):
+        self.client: AsyncClient = AsyncClient(
+            headers={
+                "User-Agent": "LRCGET v0.2.0 (https://github.com/hakimifr/lyrics-sync)"
+            }
+        )
+        self.rate_limiter = LrcLibRateLimiter()
+
+    @override
+    async def fetch(self, track: Track, retry: int = 2) -> Result:
+        await self.rate_limiter.acquire()
+        params = {
+            "track_name": track.title,
+            "artist_name": track.artist,
+            "duration": track.length,
+        }
+        if track.album:
+            params.update({"album_name": track.album})
+        attempt = 0
+        while attempt < retry:
+            response = await self.client.get(
+                "https://lrclib.net/api/get", params=params
+            )
+            self.rate_limiter.observe(response.headers)
+
+            r = cast(dict[str, str], response.json())
+            if response.status_code == 200:
+                lrc: str = r.get("syncedLyrics", "") or r.get("plainLyrics", "")
+                if not lrc:
+                    return Error(
+                        "LRCLIB return status code 200, but malformed lyrics output"
+                    )
+                return Ok(
+                    Lyrics(
+                        content=lrc,
+                        format=self.type,
+                        provider=self.name,
+                    )
+                )
+            if response.status_code == 404:
+                if params.get("album_name") is not None:
+                    params.pop("album_name")
+                    live_info.retries.append(
+                        f"LRCLIB: retrying '{track.title} - {track.artist}' without album name"
+                    )
+                    continue
+                return Error("no match from LRCLIB")
+            if response.status_code == 429:
+                continue
+            attempt += 1
+        return Error("unable to fetch from LRCLIB, keep getting ratelimited")
 
     @override
     async def close(self) -> None:

@@ -73,3 +73,24 @@ class BetterLyricsRateLimiter(RateLimiter):
         limit_type = cast(str, response_headers.get("X-RateLimit-Type"))
         if limit_type == "normal":
             self.remaining = int(remaining)
+
+
+class LrcLibRateLimiter(RateLimiter):
+    def __init__(self):
+        self.ratelimit_time: int | None = None
+        self.lock: Final[asyncio.Lock] = asyncio.Lock()
+
+    @override
+    async def acquire(self):
+        async with self.lock:
+            if self.ratelimit_time:
+                with live_info.waiting(
+                    f"[magenta] Sleeping for {self.ratelimit_time} s due to BetterLyrics ratelimit[/magenta]"
+                ):
+                    await asyncio.sleep(self.ratelimit_time)
+
+    @override
+    def observe(self, response_headers: Headers):
+        ratelimit_time = cast(str, response_headers.get("Retry-After"))
+        if ratelimit_time:
+            self.ratelimit_time = int(ratelimit_time)
