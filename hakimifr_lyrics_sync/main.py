@@ -34,6 +34,7 @@ from hakimifr_lyrics_sync.lyrics_provider import (
     LrcLib,
     LyricsFetcher,
 )
+from hakimifr_lyrics_sync.lyrics_util import detect_format
 from hakimifr_lyrics_sync.store import Config, LastSyncInfo
 from hakimifr_lyrics_sync.types import Error, Ok, Track
 
@@ -93,16 +94,18 @@ def read_tags(path: Path) -> Track:
     audio = File(path, easy=True)
     if not audio:
         live_info.failures.append(f"Failed to read metadata tags for {path.name}")
-        return Track("", "", "", 0, path)
+        return Track("", "", "", 0, "", path)
     audio = cast(dict[str, str], cast(object, audio))
     artists = audio.get("artist", [""])[0]
     title = audio.get("title", [""])[0]
     album = audio.get("album", [""])[0]
+    lyrics = audio.get("lyrics", [""])[0]
     return Track(
         title=title,
         album=album,
         artist=artists,
         length=cast(float, audio.info.length),  # pyright: ignore[reportAttributeAccessIssue]
+        existing_lyrics=lyrics,
         path=path,
     )
 
@@ -127,6 +130,26 @@ async def process_file(path: Path, semaphore: asyncio.Semaphore) -> bool:
         console.print(f"[yellow]Not enough song metadata for {path.name}[/yellow]")
         live_info.increment_prog_bar()
         return False
+    if track.existing_lyrics:
+        match detect_format(track.existing_lyrics):
+            case "ttml":
+                console.print(
+                    f"File '{path.name}' already synced with TTML format but not in database, adding"
+                )
+                live_info.skipped += 1
+                live_info.increment_prog_bar()
+                config.store_sync_info(path, LastSyncInfo.ALREADY_SYNCED, "ttml")
+                return True
+            case "elrc":
+                console.print(
+                    f"File '{path.name}' already synced with eLRC format, syncing anyway in case TTML is available"
+                )
+            case "lrc":
+                console.print(
+                    f"File '{path.name}' already synced with LRC format, syncing anyway in case TTML is available"
+                )
+            case "plain":
+                pass
     async with semaphore:
         lyrics = await lyrics_fetcher.fetch(track)
         live_info.increment_prog_bar()

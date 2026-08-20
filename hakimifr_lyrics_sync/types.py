@@ -40,6 +40,7 @@ class Track:
     album: str
     artist: str
     length: float
+    existing_lyrics: str
     path: Path
 
 
