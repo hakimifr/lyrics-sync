@@ -98,7 +98,7 @@ class Config:
 
     def save_config_to_file(self) -> None:
         with self.config_path.open("w") as f:
-            json.dump(asdict(self.config), f)
+            json.dump(asdict(self.config), f, indent=2)
 
     @property
     def config(self) -> ConfigRoot:
