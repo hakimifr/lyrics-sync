@@ -164,6 +164,7 @@ async def main():
         live_info.start()
         await asyncio.gather(
             *(process_file(path, semaphore) for path in valid_files),
+            return_exceptions=True,
         )
         await lyrics_fetcher.close()
         live_info.stop()
