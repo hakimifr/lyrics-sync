@@ -150,6 +150,11 @@ class Config:
                     self.config.lyrics_already_synced.append(
                         LyricsRecord(sync_level, p, time.time())
                     )
+                    self.config.lyrics_failed_sync = [
+                        l
+                        for l in self.config.lyrics_failed_sync
+                        if l.audio_file_path != p
+                    ]
             case LastSyncInfo.FAILED:
                 if p not in [l.audio_file_path for l in self.config.lyrics_failed_sync]:
                     self.config.lyrics_failed_sync.append(
