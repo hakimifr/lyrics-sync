@@ -14,7 +14,6 @@
 
 import argparse
 import asyncio
-import sys
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
@@ -42,7 +41,7 @@ SUPPORTED_EXTENSIONS: set[str] = {".mp3", ".flac", ".opus", ".m4a"}
 
 root_parser = argparse.ArgumentParser(
     prog="lsync",
-    usage=f"{sys.argv[0]} sync <directory to traverse 1> [dir to traverse 2]",
+    usage="lsync sync <directory/file to traverse 1> [dir/file to traverse 2] ...",
     description="Automatically fetches lyrics for your audio files.",
 )
 
@@ -110,8 +109,10 @@ def read_tags(path: Path) -> Track:
     )
 
 
-def find_audio_files(dir: Path) -> Generator[Path]:
-    for f in dir.rglob("*"):
+def find_audio_files(p: Path) -> Generator[Path]:
+    if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS:
+        yield p
+    for f in p.rglob("*"):
         if f.suffix.lower() in SUPPORTED_EXTENSIONS:
             yield f
 

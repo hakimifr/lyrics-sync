@@ -10,7 +10,8 @@ To use, simply run this in Termux (you need uv installed, `pkg install uv`):
 uvx --from hakimifr-lyrics-sync@latest lsync <path-to-music-files 1> [path-to-music-files 2] ...
 ```
 
-where `path-to-music-files` is a directory, not a file.
+where `path-to-music-files` is a directory or files. Directories will be
+traversed recursively.
 
 It's fine to run the script many times on the same directory, as the script
 maintains its own JSON containing list of files that have already been synced.
