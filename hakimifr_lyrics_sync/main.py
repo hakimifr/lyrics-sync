@@ -95,7 +95,7 @@ def read_tags(path: Path) -> Track:
         live_info.failures.append(f"Failed to read metadata tags for {path.name}")
         return Track("", "", "", 0, "", path)
     audio = cast(dict[str, str], cast(object, audio))
-    artists = audio.get("artist", [""])[0]
+    artists = audio.get("artist", [""])[0].removesuffix(".")
     title = audio.get("title", [""])[0]
     album = audio.get("album", [""])[0]
     lyrics = audio.get("lyrics", [""])[0]
