@@ -15,6 +15,8 @@
 from rich.console import Console
 
 from hakimifr_lyrics_sync.rich import LiveInfo
+from hakimifr_lyrics_sync.types import CliOpts
 
+cli_opts = CliOpts(False, False)
 console = Console()
 live_info = LiveInfo(console)

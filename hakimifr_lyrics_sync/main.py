@@ -26,7 +26,7 @@ from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4
 from mutagen.oggopus import OggOpus
 
-from hakimifr_lyrics_sync import console, live_info
+from hakimifr_lyrics_sync import cli_opts, console, live_info
 from hakimifr_lyrics_sync.lyrics_provider import (
     Apple,
     BetterLyrics,
@@ -47,6 +47,17 @@ root_parser = argparse.ArgumentParser(
 
 subparsers = root_parser.add_subparsers()
 sync_parser = subparsers.add_parser("sync")
+sync_parser.add_argument(
+    "-f",
+    "--force-sync",
+    action="store_true",
+    help="Force sync regardless of the sync state in the config file.",
+)
+sync_parser.add_argument(
+    "--no-check-existing",
+    action="store_true",
+    help="Do not check existing lyrics for files that have not been marked as synced yet.",
+)
 
 sync_parser.add_argument("sync", nargs="+")
 
@@ -119,10 +130,14 @@ def find_audio_files(p: Path) -> Generator[Path]:
 
 async def process_file(path: Path, semaphore: asyncio.Semaphore) -> bool:
     track = await asyncio.to_thread(read_tags, path)
-    if config.should_sync(path) in {
-        LastSyncInfo.SUCCESSFUL,
-        LastSyncInfo.ALREADY_SYNCED,
-    }:
+    if (
+        config.should_sync(path)
+        in {
+            LastSyncInfo.SUCCESSFUL,
+            LastSyncInfo.ALREADY_SYNCED,
+        }
+        and not cli_opts.force_sync
+    ):
         console.print(f"Skipping already synced file '{path.name}'")
         live_info.skipped += 1
         live_info.increment_prog_bar()
@@ -131,7 +146,7 @@ async def process_file(path: Path, semaphore: asyncio.Semaphore) -> bool:
         console.print(f"[yellow]Not enough song metadata for {path.name}[/yellow]")
         live_info.increment_prog_bar()
         return False
-    if track.existing_lyrics:
+    if track.existing_lyrics and not cli_opts.no_check_existing:
         match detect_format(track.existing_lyrics):
             case "ttml":
                 console.print(
@@ -179,6 +194,10 @@ async def process_file(path: Path, semaphore: asyncio.Semaphore) -> bool:
 async def main():
     parsed = root_parser.parse_args()
     if hasattr(parsed, "sync"):
+        if parsed.force_sync:  # pyright: ignore[reportAny]
+            cli_opts.force_sync = True
+        if parsed.no_check_existing:  # pyright: ignore[reportAny]
+            cli_opts.no_check_existing = True
         valid_files: list[Path] = []
         semaphore = asyncio.Semaphore(3)
         for d in cast(list[str], parsed.sync):

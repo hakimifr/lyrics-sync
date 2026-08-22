@@ -20,6 +20,12 @@ type SyncLevel = Literal["ttml", "elrc", "lrc", "plain"]
 
 
 @dataclass
+class CliOpts:
+    no_check_existing: bool
+    force_sync: bool
+
+
+@dataclass
 class Ok:
     lyrics: Lyrics
     ok: Literal[True] = True
