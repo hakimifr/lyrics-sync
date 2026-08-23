@@ -21,6 +21,7 @@ lsync = "hakimifr_lyrics_sync.__main__:run"
 
 [dependency-groups]
 dev = [
+    "basedpyright>=1.39.10",
     "ruff>=0.16.3",
     "ty>=0.0.72",
 ]
