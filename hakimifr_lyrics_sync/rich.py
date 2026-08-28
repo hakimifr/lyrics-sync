@@ -52,9 +52,7 @@ class LiveInfo:  # I can't think of a better name
             TimeRemainingColumn(),
         )
         self._task = self._progress.add_task("Fetching lyrics", total=0)
-        self._live = Live(
-            get_renderable=self._render, console=self.console, refresh_per_second=15
-        )
+        self._live = Live(get_renderable=self._render, console=self.console, refresh_per_second=15)
 
     @contextmanager
     def waiting(self, msg: str) -> Generator[None]:
@@ -78,9 +76,7 @@ class LiveInfo:  # I can't think of a better name
         p_summary = Panel(t_summary, border_style="bold cyan")
         t_summary.add_row("[bold][green]Synced[/]", f"[green]{self.synced}[/]")
         if self.fallback:
-            t_summary.add_row(
-                "[grey50]  via fallback[/]", f"[grey50]{self.fallback}[/]"
-            )
+            t_summary.add_row("[grey50]  via fallback[/]", f"[grey50]{self.fallback}[/]")
         if self.skipped:
             t_summary.add_row("[grey50]Skipped[/]", f"[grey50]{self.skipped}[/]")
         if self.failures:

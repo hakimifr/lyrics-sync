@@ -26,6 +26,7 @@ class RateLimiter(ABC):
     @abstractmethod
     async def acquire(self): ...
 
+    @abstractmethod
     def observe(self, response_headers: Headers) -> None: ...
 
 
@@ -50,6 +51,10 @@ class ItunesRateLimiter(RateLimiter):
                 now = time.monotonic()
                 self.calls = [t for t in self.calls if now - t < self.period]
             self.calls.append(time.monotonic())
+
+    @override
+    def observe(self, response_headers: Headers) -> None:
+        return
 
 
 class BetterLyricsRateLimiter(RateLimiter):

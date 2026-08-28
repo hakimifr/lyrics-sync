@@ -180,14 +180,10 @@ async def process_file(path: Path, semaphore: asyncio.Semaphore) -> bool:
             case Ok():
                 ret = await asyncio.to_thread(write_lyrics, path, lyrics.lyrics.content)
                 if not ret:
-                    live_info.failures.append(
-                        f"Failed to write lyrics for '{path.name}'"
-                    )
+                    live_info.failures.append(f"Failed to write lyrics for '{path.name}'")
                     config.store_sync_info(path, LastSyncInfo.FAILED, "plain")
                     return False
-                config.store_sync_info(
-                    path, LastSyncInfo.SUCCESSFUL, lyrics.lyrics.format
-                )
+                config.store_sync_info(path, LastSyncInfo.SUCCESSFUL, lyrics.lyrics.format)
                 return True
 
 

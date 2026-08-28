@@ -1,0 +1,39 @@
+line-length = 99
+target-version = "py312"
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "B",   # bugbear (great for catching common mistakes)
+    "C4",  # comprehensions
+    "UP",  # pyupgrade (keeps code modern)
+    "I",   # isort (import sorting)
+    "N",   # PEP8 naming
+    "S",   # bandit (basic security issues)
+    "BLE", # catch-all except
+    "A",   # shadowed builtins
+    "G",   # do not use f-string for logging and bunch of logging practices
+]
+ignore = [
+    "S101",    # we ain't ever running with -O so assert stays
+    "BLE001",  # allow bare exception
+    "S404",    # `subprocess` module is possibly insecure
+    "S314",    # Using `xml` to parse untrusted data is known to be vulnerable to XML attacks
+    "E501",    # line too long
+    "E741",    # ambiguous variable name,
+    "F821",    # undefined names, (based)pyright handles this better
+]
+fixable = ["ALL"]
+unfixable = []
+
+exclude = [
+    "docs/*"
+]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

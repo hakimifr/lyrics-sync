@@ -66,9 +66,7 @@ class Apple(LyricsProvider):
         )
 
         if itunes_response.status_code != 200:
-            return Error(
-                f"iTunes search failed, status code {itunes_response.status_code}"
-            )
+            return Error(f"iTunes search failed, status code {itunes_response.status_code}")
 
         response = cast(dict[str, str], itunes_response.json())
         results = cast(list[dict[str, str]], cast(object, response["results"]))
@@ -126,7 +124,7 @@ class BetterLyrics(LyricsProvider):
         }
         if track.album:
             params.update({"al": track.album})
-        for attempt in range(retry):
+        for _attempt in range(retry):
             await self.rate_limiter.acquire()
             response = await self.client.get(
                 "https://lyrics-api.boidu.dev/getLyrics",
@@ -168,9 +166,7 @@ class LrcLib(LyricsProvider):
 
     def __init__(self):
         self.client: AsyncClient = AsyncClient(
-            headers={
-                "User-Agent": "LRCGET v0.2.0 (https://github.com/hakimifr/lyrics-sync)"
-            }
+            headers={"User-Agent": "LRCGET v0.2.0 (https://github.com/hakimifr/lyrics-sync)"}
         )
         self.rate_limiter = LrcLibRateLimiter()
 
@@ -186,18 +182,14 @@ class LrcLib(LyricsProvider):
             params.update({"album_name": track.album})
         attempt = 0
         while attempt < retry:
-            response = await self.client.get(
-                "https://lrclib.net/api/get", params=params
-            )
+            response = await self.client.get("https://lrclib.net/api/get", params=params)
             self.rate_limiter.observe(response.headers)
 
             r = cast(dict[str, str], response.json())
             if response.status_code == 200:
                 lrc: str = r.get("syncedLyrics", "") or r.get("plainLyrics", "")
                 if not lrc:
-                    return Error(
-                        "LRCLIB return status code 200, but malformed lyrics output"
-                    )
+                    return Error("LRCLIB return status code 200, but malformed lyrics output")
                 return Ok(
                     Lyrics(
                         content=lrc,
