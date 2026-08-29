@@ -18,6 +18,7 @@ reportUnusedParameter = false
 
 [project.scripts]
 lsync = "hakimifr_lyrics_sync.__main__:run"
+hakimifr-lyrics-sync = "hakimifr_lyrics_sync.__main__:run"
 
 [dependency-groups]
 dev = [
