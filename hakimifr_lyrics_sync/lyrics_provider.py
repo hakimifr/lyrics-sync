@@ -51,7 +51,7 @@ class AppleMusic(LyricsProvider):
 
     def __init__(self, apple_dev_token: str, apple_media_user_token: str) -> None:
         self.client: AsyncClient = AsyncClient(timeout=120)
-        self.rate_limiter = ItunesRateLimiter(10, 60)
+        self.rate_limiter = ItunesRateLimiter(20, 60)
         self.apple_dev_token: Final[str] = apple_dev_token
         self.apple_media_user_token: Final[str] = apple_media_user_token
 
@@ -119,7 +119,7 @@ class Paxsenix(LyricsProvider):
 
     def __init__(self):
         self.client: AsyncClient = AsyncClient(timeout=120)
-        self.rate_limiter = ItunesRateLimiter(10, 60)
+        self.rate_limiter = ItunesRateLimiter(20, 60)
 
     @override
     async def fetch(self, track: Track) -> Result:
