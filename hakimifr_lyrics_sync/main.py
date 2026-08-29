@@ -71,12 +71,14 @@ if (dev_token := os.getenv("APPLE_DEV_TOKEN")) and (
     console.print(
         "Apple Music dev token and media-user-token detected, setting as default provider"
     )
-    lyrics_fetcher = LyricsFetcher((
-        AppleMusic(dev_token, media_user_token),
-        BetterLyrics(),
-        Paxsenix(),
-        LrcLib(),
-    ))
+    lyrics_fetcher = LyricsFetcher(
+        (
+            AppleMusic(dev_token, media_user_token),
+            BetterLyrics(),
+            Paxsenix(),
+            LrcLib(),
+        )
+    )
 else:
     lyrics_fetcher = LyricsFetcher((BetterLyrics(), Paxsenix(), LrcLib()))
 
