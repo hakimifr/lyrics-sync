@@ -7,7 +7,7 @@ need a player that can parse TTML and show syllable-synced lyrics. I recommend
 To use, simply run this in Termux (you need uv installed, `pkg install uv`):
 
 ```sh
-uvx --from hakimifr-lyrics-sync@latest <path-to-music-files 1> [path-to-music-files 2] ...
+uvx hakimifr-lyrics-sync@latest sync <path-to-music-files 1> [path-to-music-files 2] ...
 ```
 
 or to not type that long command every time,
