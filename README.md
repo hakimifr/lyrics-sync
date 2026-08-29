@@ -17,7 +17,7 @@ or to not type that long command every time,
 uv tool install hakimifr-lyrics-sync@latest
 
 # and then
-lsync <path-to-music-files 1> [path-to-music-files 2] ...
+lsync sync <path-to-music-files 1> [path-to-music-files 2] ...
 ```
 
 where `path-to-music-files` is a directory or files. Directories will be
