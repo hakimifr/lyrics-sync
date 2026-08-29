@@ -14,6 +14,7 @@
 
 import argparse
 import asyncio
+import os
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,6 +29,7 @@ from mutagen.oggopus import OggOpus
 
 from hakimifr_lyrics_sync import cli_opts, console, live_info
 from hakimifr_lyrics_sync.lyrics_provider import (
+    AppleMusic,
     BetterLyrics,
     LrcLib,
     LyricsFetcher,
@@ -62,7 +64,21 @@ sync_parser.add_argument(
 sync_parser.add_argument("sync", nargs="+")
 
 config = Config()
-lyrics_fetcher = LyricsFetcher((BetterLyrics(), Paxsenix(), LrcLib()))
+
+if (dev_token := os.getenv("APPLE_DEV_TOKEN")) and (
+    media_user_token := os.getenv("APPLE_MEDIA_USER_TOKEN")
+):
+    console.print(
+        "Apple Music dev token and media-user-token detected, setting as default provider"
+    )
+    lyrics_fetcher = LyricsFetcher((
+        AppleMusic(dev_token, media_user_token),
+        BetterLyrics(),
+        Paxsenix(),
+        LrcLib(),
+    ))
+else:
+    lyrics_fetcher = LyricsFetcher((BetterLyrics(), Paxsenix(), LrcLib()))
 
 
 @dataclass

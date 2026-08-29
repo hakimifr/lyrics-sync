@@ -22,15 +22,23 @@ Any failed sync will be reattempted when ran on the same directory.
 Currently, lyrics are, in order of priority, sourced from BetterLyrics (TTML),
 Paxsenix (TTML) and LRCLIB (LRC). Granted, BetterLyrics mostly source their
 TTML from Apple, and so Paxsenix might seem redundant. But BetterLyrics
-endpoint sometimes does not have a match, especially if the audio files
-metadata differs even slightly. In which case, Paxsenix might actually succeds.
+endpoint sometimes does not have a match (at least from my test anyway.
+BetterLyrics seems kinda unreliable), especially if the audio files metadata
+differs even slightly. In which case, Paxsenix might actually succeds.
 
 The reason is, Paxsenix is not alone on its own because the API only allows
 fetching Apple's TTML by the Apple Music/iTunes song id. So, Paxsenix
 implementation actually uses iTunes search API to get the song id, and only
 then is it fetched from Paxsenix's cache. Please see
 [`lyrics_provider.py`](./hakimifr_lyrics_sync/lyrics_provider.py) to see the
-actual implementation. TL;DR, Paxsenix is actually iTunes + Paxsenix itself.
+actual implementation, I swear i tried to not make the code spaghetti :p.
+
+Optionally, you can fetch from Apple Music directly, but you need an active
+Apple Music subscription. Export `APPLE_DEV_TOKEN` and
+`APPLE_MEDIA_USER_TOKEN`. The script will detect the variable and enable
+AppleMusic provider automatically (and hopefully does not fail, I've only
+tested this once). For now the AppleMusic provider also uses iTunes search API,
+like Paxsenix itself.
 
 ## License
 
@@ -49,3 +57,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 ```
+
+No clanker were harmed (or used) in the making of this except to understand how
+id3v2 and vorbis stuff works. In the end I used mutagen anyway LOL

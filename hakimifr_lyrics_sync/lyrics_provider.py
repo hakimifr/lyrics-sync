@@ -14,7 +14,7 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from typing import ClassVar, Final, cast, final, override
+from typing import Any, ClassVar, Final, cast, final, override
 
 from httpx import AsyncClient
 
@@ -45,13 +45,81 @@ class LyricsProvider(ABC):
 
 
 @final
+class AppleMusic(LyricsProvider):
+    name = "Apple Music + iTunes (TTML)"
+    type = "ttml"
+
+    def __init__(self, apple_dev_token: str, apple_media_user_token: str) -> None:
+        self.client: AsyncClient = AsyncClient(timeout=120)
+        self.rate_limiter = ItunesRateLimiter(10, 60)
+        self.apple_dev_token: Final[str] = apple_dev_token
+        self.apple_media_user_token: Final[str] = apple_media_user_token
+
+    @override
+    async def fetch(self, track: Track) -> Result:
+        await self.rate_limiter.acquire()
+        itunes_response = await self.client.get(
+            "https://itunes.apple.com/search",
+            params={
+                "term": f"{track.title} - {track.artist}",
+                "country": "US",
+                "media": "music",
+            },
+        )
+
+        if itunes_response.status_code != 200:
+            return Error(f"iTunes search failed, status code {itunes_response.status_code}")
+
+        response = cast(dict[str, str], itunes_response.json())
+        results = cast(list[dict[str, str]], cast(object, response["results"]))
+
+        if len(results) == 0:
+            return Error("iTunes search failed, no match found")
+        track_id = results[0]["trackId"]
+
+        lyrics_response = await self.client.get(
+            f"https://amp-api.music.apple.com/v1/catalog/my/songs/{track_id}/syllable-lyrics?l%5Blyrics%5D=en-gb&l%5Bscript%5D=en-Latn&extend=ttmlLocalizations",
+            headers={
+                "Authorization": f"Bearer {self.apple_dev_token}",
+                "Origin": "https://music.apple.com",
+                "Referer": "https://music.apple.com/",
+                "Media-User-Token": self.apple_media_user_token,
+                "Accept-Language": "en-MY,en-GB;q=0.9,en-US;q=0.8,en;q=0.7",
+            },
+            timeout=30,
+        )
+
+        if lyrics_response.status_code != 200:
+            return Error("iTunes search succeeded but fetching lyrics from Apple Music failed")
+
+        response = cast(dict[str, Any], lyrics_response.json())  # pyright: ignore[reportExplicitAny]
+        ttml_attributes = response["data"][0].get("attributes")  # pyright: ignore[reportAny]
+        ttml = ttml_attributes.get("ttmlLocalizations") or ttml_attributes.get("ttml")  # pyright: ignore[reportAny]
+
+        if not ttml:
+            return Error("unexpected missing of lyrics from Apple because status code was 200")
+
+        return Ok(
+            Lyrics(
+                content=ttml,  # pyright: ignore[reportAny]
+                format="ttml",
+                provider=self.name,
+            )
+        )
+
+    @override
+    async def close(self) -> None:
+        await self.client.aclose()
+
+
+@final
 class Paxsenix(LyricsProvider):
     name = "Paxsenix + iTunes (TTML)"
     type = "ttml"
 
     def __init__(self):
         self.client: AsyncClient = AsyncClient(timeout=120)
-        self.rate_limiter = ItunesRateLimiter(20, 60)
+        self.rate_limiter = ItunesRateLimiter(10, 60)
 
     @override
     async def fetch(self, track: Track) -> Result:
