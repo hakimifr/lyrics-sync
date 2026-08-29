@@ -28,10 +28,10 @@ from mutagen.oggopus import OggOpus
 
 from hakimifr_lyrics_sync import cli_opts, console, live_info
 from hakimifr_lyrics_sync.lyrics_provider import (
-    Apple,
     BetterLyrics,
     LrcLib,
     LyricsFetcher,
+    Paxsenix,
 )
 from hakimifr_lyrics_sync.lyrics_util import detect_format
 from hakimifr_lyrics_sync.store import Config, LastSyncInfo
@@ -62,7 +62,7 @@ sync_parser.add_argument(
 sync_parser.add_argument("sync", nargs="+")
 
 config = Config()
-lyrics_fetcher = LyricsFetcher((BetterLyrics(), Apple(), LrcLib()))
+lyrics_fetcher = LyricsFetcher((BetterLyrics(), Paxsenix(), LrcLib()))
 
 
 @dataclass

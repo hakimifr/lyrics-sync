@@ -45,8 +45,8 @@ class LyricsProvider(ABC):
 
 
 @final
-class Apple(LyricsProvider):
-    name = "Apple Music (iTunes + Paxsenix, TTML)"
+class Paxsenix(LyricsProvider):
+    name = "Paxsenix + iTunes (TTML)"
     type = "ttml"
 
     def __init__(self):
