@@ -71,7 +71,7 @@ sync_parser.add_argument("sync", nargs="+")
 parsed = root_parser.parse_args()
 
 config = Config()
-disabled_providers: list[str] = parsed.disable_providers or parsed.d or []  # pyright: ignore[reportAny]
+disabled_providers: str = parsed.disable_providers or parsed.d or ""  # pyright: ignore[reportAny]
 
 dev_token = os.getenv("APPLE_DEV_TOKEN")
 media_user_token = os.getenv("APPLE_MEDIA_USER_TOKEN")
@@ -80,12 +80,12 @@ if not dev_token and not media_user_token:
     console.print(
         "Disabling Apple Music provider, APPLE_DEV_TOKEN and APPLE_MEDIA_USER_TOKEN is unset"
     )
-    disabled_providers.append(AppleMusic.id)
+    disabled_providers += AppleMusic.id
 
 lyrics_fetcher = LyricsFetcher([
     lf
     for lf in [AppleMusic(dev_token, media_user_token), BetterLyrics(), Paxsenix(), LrcLib()]  # pyright: ignore[reportArgumentType]
-    if lf.id not in disabled_providers
+    if lf.id not in [p.strip() for p in disabled_providers.split(",")]
 ])
 
 
