@@ -60,27 +60,33 @@ sync_parser.add_argument(
     action="store_true",
     help="Do not check existing lyrics for files that have not been marked as synced yet.",
 )
+sync_parser.add_argument(
+    "-d",
+    "--disable-providers",
+    action="store",
+    help="Disable one or more providers (comma separated)",
+)
 
 sync_parser.add_argument("sync", nargs="+")
+parsed = root_parser.parse_args()
 
 config = Config()
+disabled_providers: list[str] = parsed.disable_providers or parsed.d or []  # pyright: ignore[reportAny]
 
-if (dev_token := os.getenv("APPLE_DEV_TOKEN")) and (
-    media_user_token := os.getenv("APPLE_MEDIA_USER_TOKEN")
-):
+dev_token = os.getenv("APPLE_DEV_TOKEN")
+media_user_token = os.getenv("APPLE_MEDIA_USER_TOKEN")
+
+if not dev_token and not media_user_token:
     console.print(
-        "Apple Music dev token and media-user-token detected, setting as default provider"
+        "Disabling Apple Music provider, APPLE_DEV_TOKEN and APPLE_MEDIA_USER_TOKEN is unset"
     )
-    lyrics_fetcher = LyricsFetcher(
-        (
-            AppleMusic(dev_token, media_user_token),
-            BetterLyrics(),
-            Paxsenix(),
-            LrcLib(),
-        )
-    )
-else:
-    lyrics_fetcher = LyricsFetcher((BetterLyrics(), Paxsenix(), LrcLib()))
+    disabled_providers.append(AppleMusic.id)
+
+lyrics_fetcher = LyricsFetcher([
+    lf
+    for lf in (AppleMusic(dev_token, media_user_token), BetterLyrics(), Paxsenix(), LrcLib())  # pyright: ignore[reportArgumentType]
+    if lf.id not in disabled_providers
+])
 
 
 @dataclass
@@ -206,7 +212,6 @@ async def process_file(path: Path, semaphore: asyncio.Semaphore) -> bool:
 
 
 async def main():
-    parsed = root_parser.parse_args()
     if hasattr(parsed, "sync"):
         if parsed.force_sync:  # pyright: ignore[reportAny]
             cli_opts.force_sync = True
