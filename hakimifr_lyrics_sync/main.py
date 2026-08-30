@@ -84,7 +84,7 @@ if not dev_token and not media_user_token:
 
 lyrics_fetcher = LyricsFetcher([
     lf
-    for lf in (AppleMusic(dev_token, media_user_token), BetterLyrics(), Paxsenix(), LrcLib())  # pyright: ignore[reportArgumentType]
+    for lf in [AppleMusic(dev_token, media_user_token), BetterLyrics(), Paxsenix(), LrcLib()]  # pyright: ignore[reportArgumentType]
     if lf.id not in disabled_providers
 ])
 
