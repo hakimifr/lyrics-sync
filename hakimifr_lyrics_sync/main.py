@@ -26,6 +26,7 @@ from mutagen.id3 import USLT
 from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4
 from mutagen.oggopus import OggOpus
+from rich.table import Table
 
 from hakimifr_lyrics_sync import cli_opts, console, live_info
 from hakimifr_lyrics_sync.lyrics_provider import (
@@ -47,6 +48,7 @@ root_parser = argparse.ArgumentParser(
     description="Automatically fetches lyrics for your audio files.",
 )
 
+root_parser.add_argument("list-providers", help="List all available providers' info.")
 subparsers = root_parser.add_subparsers()
 sync_parser = subparsers.add_parser("sync")
 sync_parser.add_argument(
@@ -71,7 +73,9 @@ sync_parser.add_argument("sync", nargs="+")
 parsed = root_parser.parse_args()
 
 config = Config()
-disabled_providers: str = parsed.disable_providers or parsed.d or ""  # pyright: ignore[reportAny]
+disabled_providers: str = (
+    getattr(parsed, "disable_providers", None) or getattr(parsed, "d", None) or ""
+)
 
 dev_token = os.getenv("APPLE_DEV_TOKEN")
 media_user_token = os.getenv("APPLE_MEDIA_USER_TOKEN")
@@ -233,5 +237,10 @@ async def main():
         await lyrics_fetcher.close()
         live_info.stop()
         config.save_config_to_file()
+    elif hasattr(parsed, "list-providers"):
+        t = Table("parser id", "parser name", "lyrics type")
+        for p in (AppleMusic, Paxsenix, BetterLyrics, LrcLib):
+            t.add_row(p.id, p.name, p.type)
+        console.print(t)
     else:
         root_parser.print_help()
