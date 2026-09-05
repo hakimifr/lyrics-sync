@@ -29,6 +29,7 @@ from hakimifr_lyrics_sync.types import Error, Lyrics, Ok, Result, SyncLevel, Tra
 
 
 class LyricsProvider(ABC):
+    id: ClassVar[str]
     name: ClassVar[str]
     type: ClassVar[SyncLevel]
     client: AsyncClient
@@ -46,6 +47,7 @@ class LyricsProvider(ABC):
 
 @final
 class AppleMusic(LyricsProvider):
+    id = "apple-music"
     name = "Apple Music + iTunes (TTML)"
     type = "ttml"
 
@@ -114,6 +116,7 @@ class AppleMusic(LyricsProvider):
 
 @final
 class Paxsenix(LyricsProvider):
+    id = "paxsenix"
     name = "Paxsenix + iTunes (TTML)"
     type = "ttml"
 
@@ -176,6 +179,7 @@ class Paxsenix(LyricsProvider):
 
 @final
 class BetterLyrics(LyricsProvider):
+    id = "better-lyrics"
     name = "Better Lyrics (TTML)"
     type = "ttml"
 
@@ -229,6 +233,7 @@ class BetterLyrics(LyricsProvider):
 
 @final
 class LrcLib(LyricsProvider):
+    id = "lrclib"
     name = "LRCLIB (LRC)"
     type = "lrc"
 
