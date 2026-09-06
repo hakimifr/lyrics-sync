@@ -84,7 +84,7 @@ if not dev_token and not media_user_token:
     console.print(
         "Disabling Apple Music provider, APPLE_DEV_TOKEN and APPLE_MEDIA_USER_TOKEN is unset"
     )
-    disabled_providers += AppleMusic.id
+    disabled_providers += f",{AppleMusic.id}" if disabled_providers else AppleMusic.id
 
 lyrics_fetcher = LyricsFetcher(
     [
