@@ -48,7 +48,7 @@ root_parser = argparse.ArgumentParser(
     description="Automatically fetches lyrics for your audio files.",
 )
 
-root_parser.add_argument("list-providers", help="List all available providers' info.")
+# root_parser.add_argument("list-providers", help="List all available providers' info.")
 subparsers = root_parser.add_subparsers()
 sync_parser = subparsers.add_parser("sync")
 sync_parser.add_argument(
@@ -178,7 +178,7 @@ async def process_file(path: Path, semaphore: asyncio.Semaphore) -> bool:
         return False
     if track.existing_lyrics and not cli_opts.no_check_existing:
         match detect_format(track.existing_lyrics):
-            case "ttml":
+            case "ttml" | "ttml:word" | "ttml:line":
                 console.print(
                     f"File '{path.name}' already synced with TTML format but not in database, adding"
                 )
@@ -240,7 +240,7 @@ async def main():
     elif hasattr(parsed, "list-providers"):
         t = Table("parser id", "parser name", "lyrics type")
         for p in (AppleMusic, Paxsenix, BetterLyrics, LrcLib):
-            t.add_row(p.id, p.name, p.type)
+            t.add_row(p.id, p.name, ",".join(p.type))
         console.print(t)
     else:
         root_parser.print_help()

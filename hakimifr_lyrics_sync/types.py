@@ -16,7 +16,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-type SyncLevel = Literal["ttml", "elrc", "lrc", "plain"]
+type SyncLevel = Literal[
+    "ttml",
+    "ttml:word",
+    "ttml:line",
+    "elrc",
+    "lrc",
+    "plain",
+]
 
 
 @dataclass

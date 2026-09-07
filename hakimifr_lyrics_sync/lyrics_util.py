@@ -15,6 +15,7 @@
 import re
 from xml.etree import ElementTree
 
+from hakimifr_lyrics_sync import console
 from hakimifr_lyrics_sync.types import SyncLevel
 
 _XML_PROLOG = re.compile(r"^\s*(?:<\?xml|<!--|<tt\b|<[a-zA-Z_])")
@@ -26,7 +27,18 @@ def detect_format(text: str) -> SyncLevel:
     if _XML_PROLOG.match(text):
         try:
             ElementTree.fromstring(text)
-            return "ttml"
+            m = re.match('itunes:timing="(Word|Line)"', text)
+            if not m:
+                console.print("[yellow]detect_format (match): unable to determine ttml type[/]")
+                return "ttml"
+            t = m.group(1)
+            if not t:
+                console.print("[yellow]detect_format (type): unable to determine ttml type[/]")
+                return "ttml"
+            if t == "Word":
+                return "ttml:word"
+            if t == "Line":
+                return "ttml:line"
         except ElementTree.ParseError:
             pass
 
