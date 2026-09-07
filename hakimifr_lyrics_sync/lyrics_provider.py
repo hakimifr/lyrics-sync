@@ -19,6 +19,7 @@ from typing import Any, ClassVar, Final, cast, final, override
 from httpx import AsyncClient
 
 from hakimifr_lyrics_sync import console, live_info
+from hakimifr_lyrics_sync.lyrics_util import detect_format
 from hakimifr_lyrics_sync.rate_limiter import (
     BetterLyricsRateLimiter,
     ItunesRateLimiter,
@@ -29,8 +30,9 @@ from hakimifr_lyrics_sync.types import Error, Lyrics, Ok, Result, SyncLevel, Tra
 
 
 class LyricsProvider(ABC):
+    id: ClassVar[str]
     name: ClassVar[str]
-    type: ClassVar[SyncLevel]
+    type: ClassVar[list[SyncLevel]]
     client: AsyncClient
     rate_limiter: RateLimiter
 
@@ -46,8 +48,9 @@ class LyricsProvider(ABC):
 
 @final
 class AppleMusic(LyricsProvider):
+    id = "apple-music"
     name = "Apple Music + iTunes (TTML)"
-    type = "ttml"
+    type = ["ttml", "ttml:word", "ttml:line"]
 
     def __init__(self, apple_dev_token: str, apple_media_user_token: str) -> None:
         self.client: AsyncClient = AsyncClient(timeout=120)
@@ -102,7 +105,7 @@ class AppleMusic(LyricsProvider):
         return Ok(
             Lyrics(
                 content=ttml,  # pyright: ignore[reportAny]
-                format="ttml",
+                format=detect_format(cast(str, ttml)),
                 provider=self.name,
             )
         )
@@ -114,8 +117,9 @@ class AppleMusic(LyricsProvider):
 
 @final
 class Paxsenix(LyricsProvider):
+    id = "paxsenix"
     name = "Paxsenix + iTunes (TTML)"
-    type = "ttml"
+    type = ["ttml", "ttml:word", "ttml:line"]
 
     def __init__(self):
         self.client: AsyncClient = AsyncClient(timeout=120)
@@ -157,10 +161,11 @@ class Paxsenix(LyricsProvider):
                 f"Paxsenix lyrics fetch failed, status code {lyrics_response.status_code}, error: {error}"
             )
 
+        c = cast(str, lyrics_response.json()["content"])
         return Ok(
             Lyrics(
-                content=cast(str, lyrics_response.json()["content"]),
-                format=self.type,
+                content=c,
+                format=detect_format(c),
                 provider=self.name,
             )
         )
@@ -176,8 +181,9 @@ class Paxsenix(LyricsProvider):
 
 @final
 class BetterLyrics(LyricsProvider):
+    id = "better-lyrics"
     name = "Better Lyrics (TTML)"
-    type = "ttml"
+    type = ["ttml", "ttml:line", "ttml:word"]
 
     def __init__(self):
         self.client: AsyncClient = AsyncClient()
@@ -207,7 +213,7 @@ class BetterLyrics(LyricsProvider):
                     Lyrics(
                         content=ttml,
                         provider=self.name,
-                        format=self.type,
+                        format=detect_format(ttml),
                     )
                 )
             if response.status_code == 422:
@@ -229,8 +235,9 @@ class BetterLyrics(LyricsProvider):
 
 @final
 class LrcLib(LyricsProvider):
+    id = "lrclib"
     name = "LRCLIB (LRC)"
-    type = "lrc"
+    type = ["lrc"]
 
     def __init__(self):
         self.client: AsyncClient = AsyncClient(
@@ -261,7 +268,7 @@ class LrcLib(LyricsProvider):
                 return Ok(
                     Lyrics(
                         content=lrc,
-                        format=self.type,
+                        format=self.type[0],
                         provider=self.name,
                     )
                 )
