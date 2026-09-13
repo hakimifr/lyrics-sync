@@ -24,6 +24,7 @@ ignore = [
     "E501",    # line too long
     "E741",    # ambiguous variable name,
     "F821",    # undefined names, (based)pyright handles this better
+    "S311",    # we're not using random module for cryptography purposes
 ]
 fixable = ["ALL"]
 unfixable = []
