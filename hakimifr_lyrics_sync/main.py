@@ -48,9 +48,12 @@ root_parser = argparse.ArgumentParser(
     description="Automatically fetches lyrics for your audio files.",
 )
 
-# root_parser.add_argument("list-providers", help="List all available providers' info.")
-subparsers = root_parser.add_subparsers()
+subparsers = root_parser.add_subparsers(dest="command", required=True)
 sync_parser = subparsers.add_parser("sync")
+list_providers_parser = subparsers.add_parser(
+    "list-providers",
+    help="List all available providers' info.",
+)
 sync_parser.add_argument(
     "-f",
     "--force-sync",
@@ -69,7 +72,7 @@ sync_parser.add_argument(
     help="Disable one or more providers (comma separated)",
 )
 
-sync_parser.add_argument("sync", nargs="+")
+sync_parser.add_argument("directories", nargs="+")
 parsed = root_parser.parse_args()
 
 config = Config()
@@ -218,14 +221,19 @@ async def process_file(path: Path, semaphore: asyncio.Semaphore) -> bool:
 
 
 async def main():
-    if hasattr(parsed, "sync"):
+    if parsed.command == "list-providers":
+        t = Table("parser id", "parser name", "lyrics type")
+        for p in (AppleMusic, Paxsenix, BetterLyrics, LrcLib):
+            t.add_row(p.id, p.name, ",".join(p.type))
+        console.print(t)
+    elif parsed.command == "sync":
         if parsed.force_sync:  # pyright: ignore[reportAny]
             cli_opts.force_sync = True
         if parsed.no_check_existing:  # pyright: ignore[reportAny]
             cli_opts.no_check_existing = True
         valid_files: list[Path] = []
         semaphore = asyncio.Semaphore(3)
-        for d in cast(list[str], parsed.sync):
+        for d in cast(list[str], parsed.directories):
             valid_files.extend(list(find_audio_files(Path(d))))
 
         live_info.update_total(len(valid_files))
@@ -237,10 +245,5 @@ async def main():
         await lyrics_fetcher.close()
         live_info.stop()
         config.save_config_to_file()
-    elif hasattr(parsed, "list-providers"):
-        t = Table("parser id", "parser name", "lyrics type")
-        for p in (AppleMusic, Paxsenix, BetterLyrics, LrcLib):
-            t.add_row(p.id, p.name, ",".join(p.type))
-        console.print(t)
     else:
         root_parser.print_help()
