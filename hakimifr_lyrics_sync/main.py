@@ -37,7 +37,7 @@ from hakimifr_lyrics_sync.lyrics_provider import (
     Paxsenix,
 )
 from hakimifr_lyrics_sync.lyrics_util import detect_format
-from hakimifr_lyrics_sync.store import Config, LastSyncInfo
+from hakimifr_lyrics_sync.store import Config, ConfigRoot, LastSyncInfo
 from hakimifr_lyrics_sync.types import Error, Ok, Track
 
 SUPPORTED_EXTENSIONS: set[str] = {".mp3", ".flac", ".opus", ".m4a"}
@@ -53,6 +53,10 @@ sync_parser = subparsers.add_parser("sync")
 list_providers_parser = subparsers.add_parser(
     "list-providers",
     help="List all available providers' info.",
+)
+clean_db_parser = subparsers.add_parser(
+    "clean-db",
+    help="Delete the existing database. This action is destructive",
 )
 sync_parser.add_argument(
     "-f",
@@ -250,5 +254,8 @@ async def main():
         await lyrics_fetcher.close()
         live_info.stop()
         config.save_config_to_file()
+        config.save_config_to_file()
+    elif parsed.command == "clean-db":  # pyright: ignore[reportAny]
+        config.config = ConfigRoot()
     else:
         root_parser.print_help()
