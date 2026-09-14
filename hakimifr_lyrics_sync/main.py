@@ -181,12 +181,16 @@ async def process_file(path: Path, semaphore: asyncio.Semaphore) -> bool:
         return False
     if track.existing_lyrics and not cli_opts.no_check_existing:
         match detect_format(track.existing_lyrics):
-            case "ttml" | "ttml:word" | "ttml:line":
+            case "ttml:word":
                 console.print(
                     f"File '{path.name}' already synced with TTML format but not in database, adding"
                 )
                 live_info.skipped += 1
                 live_info.increment_prog_bar()
+            case "ttml" | "ttml:line":
+                console.print(
+                    f"Resyning '{path.name}' regardless of ttml variant, as it is not the max of ttml:word"
+                )
                 config.store_sync_info(path, LastSyncInfo.ALREADY_SYNCED, "ttml")
                 return True
             case "elrc":
