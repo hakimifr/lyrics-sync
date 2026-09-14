@@ -225,12 +225,12 @@ async def process_file(path: Path, semaphore: asyncio.Semaphore) -> bool:
 
 
 async def main():
-    if parsed.command == "list-providers":
+    if parsed.command == "list-providers":  # pyright: ignore[reportAny]
         t = Table("parser id", "parser name", "lyrics type")
         for p in (AppleMusic, Paxsenix, BetterLyrics, LrcLib):
             t.add_row(p.id, p.name, ",".join(p.type))
         console.print(t)
-    elif parsed.command == "sync":
+    elif parsed.command == "sync":  # pyright: ignore[reportAny]
         if parsed.force_sync:  # pyright: ignore[reportAny]
             cli_opts.force_sync = True
         if parsed.no_check_existing:  # pyright: ignore[reportAny]
