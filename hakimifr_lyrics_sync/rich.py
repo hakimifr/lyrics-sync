@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import random
 from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Final
@@ -41,9 +42,9 @@ class LiveInfo:  # I can't think of a better name
         self.skipped: int = 0
         self.failures: list[str] = []
         self.retries: list[str] = []
-        self.status: str = ""
+        self.status: dict[float, str] = {}
 
-        self._progress = Progress(
+        self._progress: Final[Progress] = Progress(
             SpinnerColumn(),
             MofNCompleteColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -56,11 +57,14 @@ class LiveInfo:  # I can't think of a better name
 
     @contextmanager
     def waiting(self, msg: str) -> Generator[None]:
-        self.status = msg
+        id_ = random.random()
+        if id_ in self.status:
+            id_ = random.random()
+        self.status[id_] = msg
         try:
             yield
         finally:
-            self.status = ""
+            self.status.pop(id_)
 
     def _render(self) -> Group:
         t_retries = Table.grid()
@@ -82,7 +86,9 @@ class LiveInfo:  # I can't think of a better name
         if self.failures:
             t_summary.add_row("[bold][red]Failures[/]", f"[red]{len(self.failures)}[/]")
         if self.status:
-            t_summary.add_row("[bold][magenta]waiting[/]", f"[magenta]{self.status}[/]")
+            t_summary.add_row(
+                "[bold][magenta]waiting[/]", f"[magenta]{'\n'.join(self.status.values())}[/]"
+            )
 
         if render_retries:
             return Group(p_retries, p_summary, self._progress)

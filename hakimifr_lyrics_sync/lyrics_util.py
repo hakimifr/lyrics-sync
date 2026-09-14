@@ -15,18 +15,39 @@
 import re
 from xml.etree import ElementTree
 
+from hakimifr_lyrics_sync import console
 from hakimifr_lyrics_sync.types import SyncLevel
 
 _XML_PROLOG = re.compile(r"^\s*(?:<\?xml|<!--|<tt\b|<[a-zA-Z_])")
 _LRC_LINE = re.compile(r"^[ \t]*\[\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?\]", re.MULTILINE)
 _ELRC_WORD = re.compile(r"<\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?>")
+_ttml_type = re.compile(r'itunes:timing="(Word|Line)"')
 
 
 def detect_format(text: str) -> SyncLevel:
     if _XML_PROLOG.match(text):
         try:
             ElementTree.fromstring(text)
-            return "ttml"
+            m = _ttml_type.search(text)
+            if not m:
+                console.print(
+                    f"[yellow]detect_format (match): unable to determine ttml type: {text}[/]",
+                    soft_wrap=True,
+                    no_wrap=True,
+                )
+                return "ttml"
+            t = m.group(1)
+            if not t:
+                console.print(
+                    f"[yellow]detect_format (type): unable to determine ttml type: {text}[/]",
+                    soft_wrap=True,
+                    no_wrap=True,
+                )
+                return "ttml"
+            if t == "Word":
+                return "ttml:word"
+            if t == "Line":
+                return "ttml:line"
         except ElementTree.ParseError:
             pass
 
