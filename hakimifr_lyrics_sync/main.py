@@ -18,7 +18,7 @@ import os
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import cast, get_args
 
 from mutagen import File
 from mutagen.flac import FLAC
@@ -38,7 +38,7 @@ from hakimifr_lyrics_sync.lyrics_provider import (
 )
 from hakimifr_lyrics_sync.lyrics_util import detect_format
 from hakimifr_lyrics_sync.store import Config, ConfigRoot, LastSyncInfo
-from hakimifr_lyrics_sync.types import Error, Ok, Track
+from hakimifr_lyrics_sync.types import Error, Ok, SyncLevel, Track
 
 SUPPORTED_EXTENSIONS: set[str] = {".mp3", ".flac", ".opus", ".m4a"}
 
@@ -75,6 +75,11 @@ sync_parser.add_argument(
     action="store",
     help="Disable one or more providers (comma separated)",
 )
+sync_parser.add_argument(
+    "--mark-final",
+    action="store",
+    help=f"Mark lyrics types as final, avoiding attempt to reach ttml:word. Available types: {get_args(SyncLevel.__value__)}",
+)
 
 sync_parser.add_argument("directories", nargs="+")
 parsed = root_parser.parse_args()
@@ -83,6 +88,7 @@ config = Config()
 disabled_providers: str = (
     getattr(parsed, "disable_providers", None) or getattr(parsed, "d", None) or ""
 )
+marked_final: str = getattr(parsed, "mark_final", None) or ""
 
 dev_token = os.getenv("APPLE_DEV_TOKEN")
 media_user_token = os.getenv("APPLE_MEDIA_USER_TOKEN")
@@ -92,7 +98,8 @@ if not dev_token and not media_user_token:
         "Disabling Apple Music provider, APPLE_DEV_TOKEN and APPLE_MEDIA_USER_TOKEN is unset"
     )
     disabled_providers += f",{AppleMusic.id}"
-    disabled_providers.strip(",")
+disabled_providers.strip(",")
+marked_final.strip(",")
 
 lyrics_fetcher = LyricsFetcher(
     [
@@ -185,7 +192,10 @@ async def process_file(path: Path, semaphore: asyncio.Semaphore) -> bool:
         live_info.increment_prog_bar()
         return False
     if track.existing_lyrics and not cli_opts.no_check_existing:
-        match detect_format(track.existing_lyrics):
+        existing_lyrics_type = detect_format(track.existing_lyrics)
+        if existing_lyrics_type in marked_final.split(","):
+            return True
+        match existing_lyrics_type:
             case "ttml:word":
                 console.print(
                     f"File '{path.name}' already synced with TTML format but not in database, adding"
