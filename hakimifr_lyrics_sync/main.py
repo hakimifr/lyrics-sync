@@ -49,7 +49,10 @@ root_parser = argparse.ArgumentParser(
 )
 
 subparsers = root_parser.add_subparsers(dest="command", required=True)
-sync_parser = subparsers.add_parser("sync")
+sync_parser = subparsers.add_parser(
+    "sync",
+    help="Sync your songs for their lyrics",
+)
 list_providers_parser = subparsers.add_parser(
     "list-providers",
     help="List all available providers' info.",
