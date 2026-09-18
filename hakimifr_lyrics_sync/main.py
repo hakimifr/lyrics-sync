@@ -269,6 +269,12 @@ async def main():
         config.save_config_to_file()
         config.save_config_to_file()
     elif parsed.command == "clean-db":  # pyright: ignore[reportAny]
-        config.config = ConfigRoot()
+        uinput = console.input("[red][bold]Are you sure? This cannot be undone!:[/] ")
+        if uinput.lower() in {"y", "yes"}:
+            console.print("Clearing config.")
+            config.config = ConfigRoot()
+            config.save_config_to_file()
+        else:
+            console.print("[red][bold]Aborting.[/]")
     else:
         root_parser.print_help()
