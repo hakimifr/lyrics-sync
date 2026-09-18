@@ -18,7 +18,7 @@ import os
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import cast, get_args
 
 from mutagen import File
 from mutagen.flac import FLAC
@@ -37,8 +37,8 @@ from hakimifr_lyrics_sync.lyrics_provider import (
     Paxsenix,
 )
 from hakimifr_lyrics_sync.lyrics_util import detect_format
-from hakimifr_lyrics_sync.store import Config, LastSyncInfo
-from hakimifr_lyrics_sync.types import Error, Ok, Track
+from hakimifr_lyrics_sync.store import Config, ConfigRoot, LastSyncInfo
+from hakimifr_lyrics_sync.types import Error, Ok, SyncLevel, Track
 
 SUPPORTED_EXTENSIONS: set[str] = {".mp3", ".flac", ".opus", ".m4a"}
 
@@ -48,9 +48,19 @@ root_parser = argparse.ArgumentParser(
     description="Automatically fetches lyrics for your audio files.",
 )
 
-# root_parser.add_argument("list-providers", help="List all available providers' info.")
-subparsers = root_parser.add_subparsers()
-sync_parser = subparsers.add_parser("sync")
+subparsers = root_parser.add_subparsers(dest="command", required=True)
+sync_parser = subparsers.add_parser(
+    "sync",
+    help="Sync your songs for their lyrics",
+)
+list_providers_parser = subparsers.add_parser(
+    "list-providers",
+    help="List all available providers' info.",
+)
+clean_db_parser = subparsers.add_parser(
+    "clean-db",
+    help="Delete the existing database. This action is destructive",
+)
 sync_parser.add_argument(
     "-f",
     "--force-sync",
@@ -68,14 +78,20 @@ sync_parser.add_argument(
     action="store",
     help="Disable one or more providers (comma separated)",
 )
+sync_parser.add_argument(
+    "--mark-final",
+    action="store",
+    help=f"Mark lyrics types as final, avoiding attempt to reach ttml:word. Available types: {get_args(SyncLevel.__value__)}",
+)
 
-sync_parser.add_argument("sync", nargs="+")
+sync_parser.add_argument("directories", nargs="+")
 parsed = root_parser.parse_args()
 
 config = Config()
 disabled_providers: str = (
     getattr(parsed, "disable_providers", None) or getattr(parsed, "d", None) or ""
 )
+marked_final: str = getattr(parsed, "mark_final", None) or ""
 
 dev_token = os.getenv("APPLE_DEV_TOKEN")
 media_user_token = os.getenv("APPLE_MEDIA_USER_TOKEN")
@@ -84,7 +100,9 @@ if not dev_token and not media_user_token:
     console.print(
         "Disabling Apple Music provider, APPLE_DEV_TOKEN and APPLE_MEDIA_USER_TOKEN is unset"
     )
-    disabled_providers += f",{AppleMusic.id}" if disabled_providers else AppleMusic.id
+    disabled_providers += f",{AppleMusic.id}"
+disabled_providers.strip(",")
+marked_final.strip(",")
 
 lyrics_fetcher = LyricsFetcher(
     [
@@ -177,13 +195,20 @@ async def process_file(path: Path, semaphore: asyncio.Semaphore) -> bool:
         live_info.increment_prog_bar()
         return False
     if track.existing_lyrics and not cli_opts.no_check_existing:
-        match detect_format(track.existing_lyrics):
-            case "ttml" | "ttml:word" | "ttml:line":
+        existing_lyrics_type = detect_format(track.existing_lyrics)
+        if existing_lyrics_type in marked_final.split(","):
+            return True
+        match existing_lyrics_type:
+            case "ttml:word":
                 console.print(
                     f"File '{path.name}' already synced with TTML format but not in database, adding"
                 )
                 live_info.skipped += 1
                 live_info.increment_prog_bar()
+            case "ttml" | "ttml:line":
+                console.print(
+                    f"Resyning '{path.name}' regardless of ttml variant, as it is not the max of ttml:word"
+                )
                 config.store_sync_info(path, LastSyncInfo.ALREADY_SYNCED, "ttml")
                 return True
             case "elrc":
@@ -218,14 +243,19 @@ async def process_file(path: Path, semaphore: asyncio.Semaphore) -> bool:
 
 
 async def main():
-    if hasattr(parsed, "sync"):
+    if parsed.command == "list-providers":  # pyright: ignore[reportAny]
+        t = Table("parser id", "parser name", "lyrics type")
+        for p in (AppleMusic, Paxsenix, BetterLyrics, LrcLib):
+            t.add_row(p.id, p.name, ",".join(p.type))
+        console.print(t)
+    elif parsed.command == "sync":  # pyright: ignore[reportAny]
         if parsed.force_sync:  # pyright: ignore[reportAny]
             cli_opts.force_sync = True
         if parsed.no_check_existing:  # pyright: ignore[reportAny]
             cli_opts.no_check_existing = True
         valid_files: list[Path] = []
         semaphore = asyncio.Semaphore(3)
-        for d in cast(list[str], parsed.sync):
+        for d in cast(list[str], parsed.directories):
             valid_files.extend(list(find_audio_files(Path(d))))
 
         live_info.update_total(len(valid_files))
@@ -237,10 +267,14 @@ async def main():
         await lyrics_fetcher.close()
         live_info.stop()
         config.save_config_to_file()
-    elif hasattr(parsed, "list-providers"):
-        t = Table("parser id", "parser name", "lyrics type")
-        for p in (AppleMusic, Paxsenix, BetterLyrics, LrcLib):
-            t.add_row(p.id, p.name, ",".join(p.type))
-        console.print(t)
+        config.save_config_to_file()
+    elif parsed.command == "clean-db":  # pyright: ignore[reportAny]
+        uinput = console.input("[red][bold]Are you sure? This cannot be undone!:[/] ")
+        if uinput.lower() in {"y", "yes"}:
+            console.print("Clearing config.")
+            config.config = ConfigRoot()
+            config.save_config_to_file()
+        else:
+            console.print("[red][bold]Aborting.[/]")
     else:
         root_parser.print_help()

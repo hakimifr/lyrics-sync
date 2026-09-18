@@ -50,6 +50,31 @@ AppleMusic provider automatically (and hopefully does not fail, I've only
 tested this once). For now the AppleMusic provider also uses iTunes search API,
 like Paxsenix itself.
 
+To disable providers, use the flag `-d`/`--disable-providers` with the
+designated id of each providers, comma-separated. For example,
+`-d apple-music,better-lyrics`. To see the available providers along with their
+id, use the command `list-providers`.
+
+## Sync Levels
+
+As seen in [`types.py`](./hakimifr_lyrics_sync/types.py), there are quite a few
+sync levels:
+
+```python
+type SyncLevel = Literal[
+    "ttml",
+    "ttml:word",
+    "ttml:line",
+    "elrc",
+    "lrc",
+    "plain",
+]
+```
+
+The script will attempt to sync anything that is not ttml:word to it, because
+that is the highest possible level. Should you not want this behaviour, use
+`--mark-final` option, for example: `--mark-final elrc,ttml:line`.
+
 ## License
 
 ```
