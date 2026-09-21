@@ -61,6 +61,10 @@ clean_db_parser = subparsers.add_parser(
     "clean-db",
     help="Delete the existing database. This action is destructive",
 )
+print_db_parser = subparsers.add_parser(
+    "print-db",
+    help="View current db content.",
+)
 sync_parser.add_argument(
     "-f",
     "--force-sync",
@@ -276,5 +280,7 @@ async def main():
             config.save_config_to_file()
         else:
             console.print("[red][bold]Aborting.[/]")
+    elif parsed.command == "print-db":  # pyright: ignore[reportAny]
+        console.print(config.config)
     else:
         root_parser.print_help()
