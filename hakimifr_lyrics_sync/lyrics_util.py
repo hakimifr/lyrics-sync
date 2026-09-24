@@ -36,6 +36,7 @@ def detect_format(text: str) -> SyncLevel:
                     return "ttml:line"
                 case _ as t:
                     console.print(f"[yellow]ttml has no timing info: {t}[/]")
+                    return "ttml"
         except ElementTree.ParseError:
             pass
 
