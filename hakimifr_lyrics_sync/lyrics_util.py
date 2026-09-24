@@ -27,27 +27,15 @@ _ttml_type = re.compile(r'itunes:timing="(Word|Line)"')
 def detect_format(text: str) -> SyncLevel:
     if _XML_PROLOG.match(text):
         try:
-            ElementTree.fromstring(text)
-            m = _ttml_type.search(text)
-            if not m:
-                console.print(
-                    f"[yellow]detect_format (match): unable to determine ttml type: {text}[/]",
-                    soft_wrap=True,
-                    no_wrap=True,
-                )
-                return "ttml"
-            t = m.group(1)
-            if not t:
-                console.print(
-                    f"[yellow]detect_format (type): unable to determine ttml type: {text}[/]",
-                    soft_wrap=True,
-                    no_wrap=True,
-                )
-                return "ttml"
-            if t == "Word":
-                return "ttml:word"
-            if t == "Line":
-                return "ttml:line"
+            content = ElementTree.fromstring(text)
+            timing = content.get("{http://music.apple.com/lyric-ttml-internal}timing")
+            match timing:
+                case "Word":
+                    return "ttml:word"
+                case "Line":
+                    return "ttml:line"
+                case _ as t:
+                    console.print(f"[yellow]ttml has no timing info: {t}[/]")
         except ElementTree.ParseError:
             pass
 
