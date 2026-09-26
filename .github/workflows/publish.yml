@@ -1,0 +1,120 @@
+name: Publish to PyPI
+
+# Runs when a version bump lands on main, or when a vX.Y.Z tag is pushed.
+# Note that the paths filter below is only evaluated for branch pushes, a tag
+# push always triggers the workflow.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths: ["pyproject.toml"]
+  # Manual escape hatch for re-triggering a publish. Publishes whatever version
+  # pyproject.toml holds on the ref you pick, so dispatch from main.
+  workflow_dispatch:
+
+# Never let two publishes race each other into the same project.
+concurrency:
+  group: publish-pypi
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+
+      - name: Resolve version and check PyPI
+        id: version
+        run: |
+          set -euo pipefail
+
+          # Read from pyproject.toml, deliberately not from uv.lock, which can
+          # lag behind if the version was bumped without re-locking.
+          version="$(uv version --short)"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+          # A tag push has to agree with pyproject.toml, otherwise we would be
+          # publishing something other than what the tag claims.
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            tag_version="${GITHUB_REF_NAME#v}"
+            if [[ "${tag_version}" != "${version}" ]]; then
+              echo "::error::tag ${GITHUB_REF_NAME} does not match version ${version} in pyproject.toml"
+              exit 1
+            fi
+            echo "tag ${GITHUB_REF_NAME} matches pyproject version ${version}"
+          fi
+
+          # Re-runs, or a tag pushed after main already published, should be a
+          # no-op rather than a failed upload.
+          status="$(curl -sS -o /dev/null -w '%{http_code}' \
+            "https://pypi.org/pypi/hakimifr-lyrics-sync/${version}/json")"
+          case "${status}" in
+            404)
+              echo "publish=true" >> "$GITHUB_OUTPUT"
+              echo "version ${version} is not on PyPI yet, it will be published"
+              ;;
+            200)
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::hakimifr-lyrics-sync ${version} is already on PyPI, nothing to publish"
+              ;;
+            *)
+              echo "::error::unexpected HTTP ${status} from the PyPI JSON API"
+              exit 1
+              ;;
+          esac
+
+  build:
+    name: Build distributions
+    needs: check
+    if: needs.check.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.14"
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    needs: [check, build]
+    if: needs.check.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    # Must match the environment name configured on the PyPI trusted publisher,
+    # or PyPI will reject the OIDC token.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/hakimifr-lyrics-sync/${{ needs.check.outputs.version }}/
+    permissions:
+      # The only thing this job needs beyond reading the artifact.
+      id-token: write
+    steps:
+      - uses: astral-sh/setup-uv@v10
+
+      - name: Download distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        run: uv publish --trusted-publishing always
