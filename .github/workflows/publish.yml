@@ -30,7 +30,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10
+      # setup-uv has no floating major tags past v7, so this is pinned exactly.
+      - uses: astral-sh/setup-uv@v10.2.0
 
       - name: Resolve version and check PyPI
         id: version
@@ -80,7 +81,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           python-version: "3.14"
 
@@ -108,7 +109,7 @@ jobs:
       # The only thing this job needs beyond reading the artifact.
       id-token: write
     steps:
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
 
       - name: Download distributions
         uses: actions/download-artifact@v8
